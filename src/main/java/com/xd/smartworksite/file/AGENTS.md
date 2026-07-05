@@ -347,3 +347,347 @@ Add focused tests around:
 - repository queries filtering `deleted = 0`
 
 For MinIO integration, prefer adapter-level tests with a controlled test container or mockable adapter boundary. Do not require real production MinIO in unit tests.
+
+## Uploaded File Parsing Design
+
+The `file` module should also provide parsing for already-uploaded files. This feature converts Word and PDF documents to Markdown, and converts images to textual paragraph descriptions.
+
+This capability must be implemented as a file-module use case, not as logic inside knowledge, OCR, report, or review modules. Other modules should consume parsing results through the file module or through a future file facade.
+
+### Scope
+
+Supported input files:
+
+```text
+Word: .doc, .docx
+PDF: .pdf
+Images: .png, .jpg, .jpeg, .webp
+```
+
+Supported output:
+
+```text
+Word/PDF -> Markdown
+Image -> Plain text paragraph description
+```
+
+The source file must already exist in `file_object` and must be `ACTIVE`.
+
+### Architecture Position
+
+Parsing is a long-running AI capability. Do not execute model calls inside the controller.
+
+Recommended package additions:
+
+```text
+com.xd.smartworksite.file
+├── application
+│   └── FileParseApplicationService
+├── domain
+│   ├── FileParseRecord
+│   ├── FileParseStatus
+│   ├── FileParseStage
+│   └── FileParseResultFormat
+├── dto
+│   ├── FileParseRequest
+│   ├── FileParseRecordResponse
+│   └── FileParseContentResponse
+├── repository
+│   ├── FileParseRecordRepository
+│   └── MyBatisFileParseRecordRepository
+├── mapper
+│   └── FileParseRecordMapper
+└── infra
+    ├── DocumentParseModelAdapter
+    ├── QwenVlDocumentParseAdapter
+    ├── DocumentPreparationService
+    └── ParsedDocumentStorage
+```
+
+Controllers may only call `FileParseApplicationService`.
+
+`QwenVlDocumentParseAdapter` must hide provider-specific HTTP request and response details. Do not let application services construct QwenVL JSON payloads directly.
+
+### Storage Access
+
+The current `StorageAdapter` supports upload, signed URL generation, and delete. Parsing needs to read already-uploaded object content.
+
+Extend the adapter instead of using MinIO SDK directly in parsing code:
+
+```java
+InputStream openObject(String objectName);
+```
+
+If object metadata is needed later, add a storage-facing method such as:
+
+```java
+StorageObjectStat statObject(String objectName);
+```
+
+Application services and controllers must not depend on MinIO SDK classes.
+
+### Parsing Flow
+
+Recommended asynchronous flow:
+
+1. Client calls parse API with `fileId`.
+2. Application service verifies the source file exists, is `ACTIVE`, and belongs to the requested project.
+3. Application service checks whether an up-to-date successful parse result already exists for the same `file_id` and `file_hash`.
+4. If cache is reusable, return the existing parse record.
+5. Otherwise create a `file_parse_record` row with `status = PENDING`.
+6. Dispatch parsing through the `task` module, Redis queue, or a local async executor during the foundation phase.
+7. Worker reads the source object through `StorageAdapter`.
+8. Worker prepares model input based on file type.
+9. Worker calls `DocumentParseModelAdapter`.
+10. Worker normalizes output to Markdown or text.
+11. Worker stores the parse result as a new MinIO object.
+12. Worker updates `file_parse_record` with result object name, content preview, stage, progress, and status.
+
+Do not block the HTTP request until QwenVL finishes parsing.
+
+### Model Strategy
+
+Use QwenVL through an external adapter. The project must not hard-code provider credentials, endpoint URLs, or model-specific request bodies in business code.
+
+Recommended interface:
+
+```java
+public interface DocumentParseModelAdapter {
+    ParsedDocument parse(DocumentParseRequest request);
+}
+```
+
+Recommended request fields:
+
+```text
+projectId
+fileId
+fileName
+contentType
+inputFormat
+targetFormat
+pages or image frames
+prompt
+requestId
+```
+
+Recommended response fields:
+
+```text
+content
+resultFormat
+modelName
+usage
+confidence
+rawResponseObjectName
+```
+
+QwenVL prompt requirements:
+
+- For Word/PDF: preserve document hierarchy, headings, paragraphs, lists, tables, and visible figure captions as Markdown.
+- For images: describe the image as clear factual paragraphs in Chinese by default.
+- Do not invent invisible content.
+- Mark unreadable, blurred, or uncertain content explicitly.
+- Preserve safety, quality, compliance, and construction-site terms when visible.
+
+### File Preparation
+
+Word, PDF, and image files need different preparation before model calls.
+
+Recommended strategy:
+
+- Images: send the image directly to QwenVL.
+- PDF: split or render pages as images when visual layout or scanned content matters; use page batches to avoid model context and payload limits.
+- DOCX: extract structural text where possible, and render embedded images/pages for QwenVL when visual content matters.
+- DOC: convert to DOCX or PDF through a controlled converter service if required; do not shell out to uncontrolled system commands in request threads.
+
+For the foundation phase, prefer a simple adapter boundary and a small set of supported MIME types. Reject unsupported formats with `BusinessException`.
+
+### Result Storage
+
+Parsing result content may be large. Do not store full Markdown for large documents only in a database column.
+
+Recommended approach:
+
+- Store full Markdown/text result as a MinIO object.
+- Store a short preview or first section in MySQL.
+- Store provider metadata and parse diagnostics in JSON.
+
+Object naming pattern:
+
+```text
+projects/{projectId}/PARSE_RESULT/{yyyy}/{MM}/{dd}/{sourceFileId}-{parseRecordId}.md
+projects/{projectId}/PARSE_RESULT/{yyyy}/{MM}/{dd}/{sourceFileId}-{parseRecordId}.txt
+```
+
+The parse result may also be registered in `file_object` if other modules need to treat it as a normal file. If doing so, add a new `FileBizType` value:
+
+```text
+PARSE_RESULT
+```
+
+When only the file module consumes the parsed object, storing the result object name in `file_parse_record` is enough.
+
+### Database Design
+
+Add a new Flyway migration instead of modifying existing migrations.
+
+Recommended table:
+
+```sql
+CREATE TABLE file_parse_record (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Primary key ID',
+  project_id BIGINT NOT NULL COMMENT 'Project ID',
+  file_id BIGINT NOT NULL COMMENT 'Source file ID',
+  source_file_hash VARCHAR(128) NULL COMMENT 'Source file hash at parse time',
+  source_content_type VARCHAR(128) NULL COMMENT 'Source content type',
+  parse_type VARCHAR(64) NOT NULL COMMENT 'Parse type',
+  result_format VARCHAR(32) NOT NULL COMMENT 'MARKDOWN or TEXT',
+  parser_provider VARCHAR(64) NOT NULL COMMENT 'Parser provider',
+  parser_model VARCHAR(128) NULL COMMENT 'Parser model name',
+  status VARCHAR(32) NOT NULL DEFAULT 'PENDING' COMMENT 'Parse status',
+  progress INT NOT NULL DEFAULT 0 COMMENT 'Parse progress 0-100',
+  current_stage VARCHAR(64) NULL COMMENT 'Current parse stage',
+  result_object_name VARCHAR(500) NULL COMMENT 'Parsed result object name',
+  result_file_id BIGINT NULL COMMENT 'Optional registered result file ID',
+  content_preview TEXT NULL COMMENT 'Short parsed content preview',
+  error_message TEXT NULL COMMENT 'Error message',
+  metadata JSON NULL COMMENT 'Provider usage, page count, confidence, and diagnostics',
+  started_at DATETIME NULL COMMENT 'Start time',
+  finished_at DATETIME NULL COMMENT 'Finish time',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Created time',
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Updated time',
+  created_by BIGINT NULL COMMENT 'Created by user ID',
+  updated_by BIGINT NULL COMMENT 'Updated by user ID',
+  deleted TINYINT NOT NULL DEFAULT 0 COMMENT 'Logical delete flag',
+  KEY idx_file_parse_project (project_id),
+  KEY idx_file_parse_file (file_id),
+  KEY idx_file_parse_status (status),
+  KEY idx_file_parse_hash (file_id, source_file_hash),
+  KEY idx_file_parse_created_at (created_at),
+  KEY idx_file_parse_deleted (deleted)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='File parse record table';
+```
+
+Recommended parse status values:
+
+```text
+PENDING
+RUNNING
+SUCCEEDED
+FAILED
+CANCELED
+```
+
+Recommended parse stages:
+
+```text
+CREATED
+LOADING_SOURCE
+PREPARING_INPUT
+CALLING_MODEL
+NORMALIZING_RESULT
+STORING_RESULT
+FINISHED
+FAILED
+```
+
+### API Contract
+
+Recommended endpoints:
+
+```text
+POST   /api/files/{fileId}/parse
+GET    /api/files/{fileId}/parse-records
+GET    /api/files/{fileId}/parse-records/latest
+GET    /api/file-parse-records/{recordId}
+GET    /api/file-parse-records/{recordId}/content
+POST   /api/file-parse-records/{recordId}/retry
+```
+
+Recommended parse request:
+
+```json
+{
+  "projectId": 1001,
+  "force": false,
+  "targetFormat": "MARKDOWN",
+  "language": "zh-CN"
+}
+```
+
+For images, `targetFormat` should be `TEXT`.
+
+The create-parse endpoint should return the parse record immediately:
+
+```json
+{
+  "recordId": 10,
+  "fileId": 20,
+  "status": "PENDING",
+  "progress": 0,
+  "currentStage": "CREATED"
+}
+```
+
+### Configuration
+
+Recommended configuration:
+
+```yaml
+app:
+  file:
+    parse:
+      enabled: true
+      max-pages: 100
+      max-image-count: 100
+      result-preview-length: 2000
+      qwen-vl:
+        endpoint: ${QWEN_VL_ENDPOINT:}
+        api-key: ${QWEN_VL_API_KEY:}
+        model: ${QWEN_VL_MODEL:qwen-vl-plus}
+        connect-timeout-ms: ${QWEN_VL_CONNECT_TIMEOUT_MS:5000}
+        read-timeout-ms: ${QWEN_VL_READ_TIMEOUT_MS:120000}
+```
+
+Never commit a real QwenVL API key.
+
+Do not log prompts, full document content, raw model responses, access tokens, or signed URLs unless explicitly redacted.
+
+### Error Handling
+
+Suggested mappings:
+
+- Source file not found: `ErrorCode.NOT_FOUND`
+- Source file deleted or inactive: `ErrorCode.CONFLICT`
+- Unsupported content type or target format: `ErrorCode.PARAM_ERROR`
+- QwenVL timeout or provider failure: `ErrorCode.EXTERNAL_SERVICE_ERROR`
+- Parse record not found: `ErrorCode.NOT_FOUND`
+
+Failed parse records should remain queryable with `status = FAILED` and an error summary.
+
+### Security And Traceability
+
+Parsing must preserve project isolation:
+
+- Always verify `project_id`.
+- Parse records must include `project_id`.
+- Result objects must use project-scoped object names.
+- Do not expose raw MinIO object names to API consumers unless already accepted elsewhere in file responses.
+
+Traceability metadata should include:
+
+- source `file_id`
+- source `file_hash`
+- parser provider
+- parser model
+- request ID
+- page count or image count
+- usage or token count when available
+- confidence when available
+
+### Implementation Notes
+
+This repository is still in the engineering foundation phase. If implementing parsing before the full task module is ready, a local async executor is acceptable, but keep the application-service API compatible with a future task-backed implementation.
+
+Do not add direct Python, database, MinIO, OCR engine, or QwenVL calls to frontend code. Frontend should call only backend file parse APIs.
