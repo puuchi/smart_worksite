@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -29,7 +30,7 @@ public class FileObjectController {
         this.fileObjectApplicationService = fileObjectApplicationService;
     }
 
-    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<FileObjectResponse> uploadFile(@Valid @ModelAttribute FileUploadRequest request) {
         return ApiResponse.success(fileObjectApplicationService.upload(request));
     }
@@ -44,14 +45,11 @@ public class FileObjectController {
         return ApiResponse.success(fileObjectApplicationService.getFile(fileId));
     }
 
-    @GetMapping("/{fileId}/download-url")
-    public ApiResponse<FileAccessUrlResponse> createDownloadUrl(@PathVariable Long fileId) {
-        return ApiResponse.success(fileObjectApplicationService.createDownloadUrl(fileId));
-    }
-
-    @GetMapping("/{fileId}/preview-url")
-    public ApiResponse<FileAccessUrlResponse> createPreviewUrl(@PathVariable Long fileId) {
-        return ApiResponse.success(fileObjectApplicationService.createPreviewUrl(fileId));
+    @GetMapping("/{fileId}/access-url")
+    public ApiResponse<FileAccessUrlResponse> createAccessUrl(@PathVariable Long fileId,
+                                                              @RequestParam String usage,
+                                                              @RequestParam(required = false) Integer expireSeconds) {
+        return ApiResponse.success(fileObjectApplicationService.createAccessUrl(fileId, usage, expireSeconds));
     }
 
     @DeleteMapping("/{fileId}")

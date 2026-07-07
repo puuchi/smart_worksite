@@ -25,4 +25,20 @@ public class MyBatisProjectRepository implements ProjectRepository {
     public Optional<Project> findById(Long projectId) {
         return Optional.ofNullable(projectMapper.selectById(projectId));
     }
+
+    @Override
+    public Optional<Project> findByProjectCode(String projectCode) {
+        return Optional.ofNullable(projectMapper.selectByProjectCode(projectCode));
+    }
+
+    @Override
+    public Project insert(Project project) {
+        projectMapper.insert(project);
+        return project;
+    }
+
+    @Override
+    public void update(Project project) {
+        projectMapper.update(project);
+    }
 }

@@ -132,6 +132,11 @@ public class TemplateApplicationService {
         return toResponse(requireTemplate(templateId));
     }
 
+    public List<String> listTemplateVariables(Long templateId) {
+        requireTemplate(templateId);
+        return List.of();
+    }
+
     @Transactional
     public TemplateResponse updateTemplate(Long templateId, TemplateUpdateRequest request) {
         Template template = requireTemplate(templateId);

@@ -165,7 +165,7 @@
         set status = #{status},
             current_stage = #{currentStage},
             error_message = #{errorMessage},
-            started_at = case when #{status} = 'PROCESSING' then coalesce(started_at, current_timestamp) else started_at end,
+            started_at = case when #{status} = 'RUNNING' then coalesce(started_at, current_timestamp) else started_at end,
             finished_at = case when #{status} in ('SUCCESS', 'FAILED') then current_timestamp else finished_at end,
             updated_by = 1
         where id = #{taskId}

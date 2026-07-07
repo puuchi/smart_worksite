@@ -10,4 +10,10 @@ public interface ProjectRepository {
     List<Project> findPage(String keyword);
 
     Optional<Project> findById(Long projectId);
+
+    Optional<Project> findByProjectCode(String projectCode);
+
+    Project insert(Project project);
+
+    void update(Project project);
 }

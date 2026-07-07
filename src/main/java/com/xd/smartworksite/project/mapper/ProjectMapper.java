@@ -10,4 +10,10 @@ public interface ProjectMapper {
     List<Project> selectPage(@Param("keyword") String keyword);
 
     Project selectById(@Param("projectId") Long projectId);
+
+    Project selectByProjectCode(@Param("projectCode") String projectCode);
+
+    int insert(Project project);
+
+    int update(Project project);
 }

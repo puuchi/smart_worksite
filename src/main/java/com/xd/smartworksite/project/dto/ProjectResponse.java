@@ -11,6 +11,7 @@ public class ProjectResponse {
     private String status;
     private String description;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 
     public Long getProjectId() {
         return projectId;
@@ -66,5 +67,13 @@ public class ProjectResponse {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }

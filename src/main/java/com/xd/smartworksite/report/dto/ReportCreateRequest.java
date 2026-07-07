@@ -19,11 +19,12 @@ public class ReportCreateRequest {
     @Size(max = 64)
     private String reportType;
 
+    @NotNull
     private Long templateId;
     private List<Long> referenceFileIds;
     private List<Long> knowledgeBaseIds;
     private List<Long> dataSourceIds;
-    private Map<String, Object> generationParams;
+    private Map<String, Object> variables;
 
     public Long getProjectId() { return projectId; }
     public void setProjectId(Long projectId) { this.projectId = projectId; }
@@ -39,6 +40,6 @@ public class ReportCreateRequest {
     public void setKnowledgeBaseIds(List<Long> knowledgeBaseIds) { this.knowledgeBaseIds = knowledgeBaseIds; }
     public List<Long> getDataSourceIds() { return dataSourceIds; }
     public void setDataSourceIds(List<Long> dataSourceIds) { this.dataSourceIds = dataSourceIds; }
-    public Map<String, Object> getGenerationParams() { return generationParams; }
-    public void setGenerationParams(Map<String, Object> generationParams) { this.generationParams = generationParams; }
+    public Map<String, Object> getVariables() { return variables; }
+    public void setVariables(Map<String, Object> variables) { this.variables = variables; }
 }

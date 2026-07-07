@@ -72,6 +72,20 @@ class TemplateApplicationServiceTest {
                 project.setId(projectId);
                 return Optional.of(project);
             }
+
+            @Override
+            public Optional<Project> findByProjectCode(String projectCode) {
+                return Optional.empty();
+            }
+
+            @Override
+            public Project insert(Project project) {
+                return project;
+            }
+
+            @Override
+            public void update(Project project) {
+            }
         };
     }
 

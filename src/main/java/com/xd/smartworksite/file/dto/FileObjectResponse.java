@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 public class FileObjectResponse {
 
     private Long fileId;
+    private String objectName;
     private Long projectId;
     private String bizType;
     private Long bizId;
@@ -25,6 +26,14 @@ public class FileObjectResponse {
 
     public void setFileId(Long fileId) {
         this.fileId = fileId;
+    }
+
+    public String getObjectName() {
+        return objectName;
+    }
+
+    public void setObjectName(String objectName) {
+        this.objectName = objectName;
     }
 
     public Long getProjectId() {

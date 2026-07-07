@@ -52,7 +52,7 @@ class ReportGenerationApplicationServiceTest {
 
         ReportCreateResponse response = service.createReport(request);
 
-        assertThat(response.getStatus()).isEqualTo("SUCCESS");
+        assertThat(response.getStatus()).isEqualTo("COMPLETED");
         assertThat(cryptoClient.lastRequest.getReportId()).isEqualTo(String.valueOf(response.getReportId()));
         assertThat(cryptoClient.lastRequest.getTemplateVariables()).isEmpty();
         assertThat(cryptoClient.lastRequest.getReferenceDocuments()).hasSize(1);
@@ -60,7 +60,7 @@ class ReportGenerationApplicationServiceTest {
         assertThat(reportRepository.fileObjects).isEmpty();
         assertThat(reportRepository.versions).hasSize(1);
         assertThat(reportRepository.versions.get(0).getWordFileId()).isNull();
-        assertThat(reportRepository.reports.get(0).getStatus()).isEqualTo("SUCCESS");
+        assertThat(reportRepository.reports.get(0).getStatus()).isEqualTo("COMPLETED");
         assertThat(reportRepository.reports.get(0).getPreviewUrl()).contains("/report.docx");
     }
 
@@ -111,15 +111,15 @@ class ReportGenerationApplicationServiceTest {
         document.put("fileId", "manual-1");
         document.put("fileName", "密测过程信息.txt");
         document.put("content", "这里是密测过程信息。");
-        Map<String, Object> generationParams = new LinkedHashMap<>();
-        generationParams.put("referenceDocuments", List.of(document));
+        Map<String, Object> variables = new LinkedHashMap<>();
+        variables.put("referenceDocuments", List.of(document));
 
         ReportCreateRequest request = new ReportCreateRequest();
         request.setProjectId(1L);
         request.setReportName("密评报告测试");
         request.setReportType("CRYPTO_EVALUATION_REPORT");
         request.setTemplateId(1001L);
-        request.setGenerationParams(generationParams);
+        request.setVariables(variables);
         return request;
     }
 
@@ -135,6 +135,20 @@ class ReportGenerationApplicationServiceTest {
                 Project project = new Project();
                 project.setId(projectId);
                 return Optional.of(project);
+            }
+
+            @Override
+            public Optional<Project> findByProjectCode(String projectCode) {
+                return Optional.empty();
+            }
+
+            @Override
+            public Project insert(Project project) {
+                return project;
+            }
+
+            @Override
+            public void update(Project project) {
             }
         };
     }

@@ -60,7 +60,7 @@ public class ReportGenerationApplicationService {
     private static final String TASK_TYPE_REPORT_GENERATION = "REPORT_GENERATION";
     private static final String BIZ_TYPE_REPORT = "REPORT";
     private static final String TASK_STATUS_PENDING = "PENDING";
-    private static final String TASK_STATUS_PROCESSING = "PROCESSING";
+    private static final String TASK_STATUS_PROCESSING = "RUNNING";
     private static final String TASK_STATUS_SUCCESS = "SUCCESS";
     private static final String TASK_STATUS_FAILED = "FAILED";
     private static final String TASK_STAGE_CONFIG_VALIDATE = "CONFIG_VALIDATE";
@@ -114,7 +114,7 @@ public class ReportGenerationApplicationService {
 
         try {
             executeCryptoAgentGeneration(report, config, task);
-            return new ReportCreateResponse(report.getId(), task.getId(), ReportStatus.SUCCESS.name());
+            return new ReportCreateResponse(report.getId(), task.getId(), ReportStatus.COMPLETED.name());
         } catch (BusinessException ex) {
             markFailed(report.getId(), task.getId(), ex.getMessage());
             return new ReportCreateResponse(report.getId(), task.getId(), ReportStatus.FAILED.name());
@@ -155,7 +155,7 @@ public class ReportGenerationApplicationService {
         request.setReferenceFileIds(parseLongList(config.getReferenceFileIds()));
         request.setKnowledgeBaseIds(parseLongList(config.getKnowledgeBaseIds()));
         request.setDataSourceIds(parseLongList(config.getDataSourceIds()));
-        request.setGenerationParams(parseObjectMap(config.getGenerationParams()));
+        request.setVariables(parseObjectMap(config.getGenerationParams()));
         return createReport(request);
     }
 
@@ -179,7 +179,7 @@ public class ReportGenerationApplicationService {
         config.setReferenceFileIds(toJsonArray(request.getReferenceFileIds()));
         config.setKnowledgeBaseIds(toJsonArray(request.getKnowledgeBaseIds()));
         config.setDataSourceIds(toJsonArray(request.getDataSourceIds()));
-        config.setGenerationParams(toJsonObject(request.getGenerationParams()));
+        config.setGenerationParams(toJsonObject(request.getVariables()));
         config.setStatus("SUBMITTED");
         return reportRepository.saveConfig(config);
     }
@@ -192,7 +192,7 @@ public class ReportGenerationApplicationService {
         report.setReportType(reportType);
         report.setTemplateId(templateId);
         report.setEngineType(ReportEngineType.CRYPTO_AGENT_V3.name());
-        report.setStatus(ReportStatus.PENDING.name());
+        report.setStatus(ReportStatus.GENERATING.name());
         report.setProgress(0);
         return reportRepository.saveReport(report);
     }
@@ -210,7 +210,7 @@ public class ReportGenerationApplicationService {
     }
 
     private void executeCryptoAgentGeneration(Report report, ReportConfig config, GenerateTask task) {
-        reportRepository.updateReportProcessing(report.getId(), ReportStatus.PROCESSING.name(), 20, TASK_STAGE_CRYPTO_AGENT_GENERATION);
+        reportRepository.updateReportProcessing(report.getId(), ReportStatus.GENERATING.name(), 20, TASK_STAGE_CRYPTO_AGENT_GENERATION);
         reportRepository.updateTaskStatus(task.getId(), TASK_STATUS_PROCESSING, TASK_STAGE_CRYPTO_AGENT_GENERATION, null);
 
         List<ReferenceDocumentPayload> referenceDocuments = buildReferenceDocuments(config);
@@ -218,7 +218,7 @@ public class ReportGenerationApplicationService {
         CryptoAgentGenerateRequest request = new CryptoAgentGenerateRequest();
         request.setTaskId(String.valueOf(task.getId()));
         request.setReportId(String.valueOf(report.getId()));
-        request.setTemplateVariables(Map.of());
+        request.setTemplateVariables(templateVariables(config.getGenerationParams()));
         request.setReferenceDocuments(referenceDocuments);
 
         CryptoAgentGenerateResponse response = cryptoAgentV3ReportClient.generate(request);
@@ -229,7 +229,7 @@ public class ReportGenerationApplicationService {
 
         GeneratedFilePayload docx = selectDocx(response);
         ReportVersion version = saveVersion(report, config, response, null, null);
-        reportRepository.updateReportSuccess(report.getId(), version.getId(), ReportStatus.SUCCESS.name(), 100, docx.getDownloadRef());
+        reportRepository.updateReportSuccess(report.getId(), version.getId(), ReportStatus.COMPLETED.name(), 100, docx.getDownloadRef());
         reportRepository.updateTaskStatus(task.getId(), TASK_STATUS_SUCCESS, "FINISH", null);
     }
 
@@ -274,6 +274,16 @@ public class ReportGenerationApplicationService {
         } catch (IllegalArgumentException | JsonProcessingException ex) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "referenceDocuments参数格式错误");
         }
+    }
+
+    private Map<String, Object> templateVariables(String variablesJson) {
+        Map<String, Object> variables = parseObjectMap(variablesJson);
+        if (variables.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Object> templateVariables = new LinkedHashMap<>(variables);
+        templateVariables.remove("referenceDocuments");
+        return templateVariables;
     }
 
     private ReferenceDocumentPayload loadTextReferenceDocument(Long fileId) {
@@ -343,7 +353,7 @@ public class ReportGenerationApplicationService {
     private String saveGeneratedWordFromPreviewUrl(Long reportId) {
         Report report = reportRepository.findReportById(reportId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "报告不存在"));
-        if (!ReportStatus.SUCCESS.name().equals(report.getStatus())) {
+        if (!ReportStatus.COMPLETED.name().equals(report.getStatus())) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "报告尚未生成成功");
         }
         byte[] reportBytes = downloadGeneratedFile(report.getPreviewUrl());
@@ -354,7 +364,7 @@ public class ReportGenerationApplicationService {
         Long wordFileId = saveGeneratedWord(report, generatedFile, reportBytes);
         if (report.getCurrentVersionId() == null) {
             ReportVersion version = saveVersion(report, null, null, wordFileId, reportBytes);
-            reportRepository.updateReportSuccess(report.getId(), version.getId(), ReportStatus.SUCCESS.name(), 100, report.getPreviewUrl());
+            reportRepository.updateReportSuccess(report.getId(), version.getId(), ReportStatus.COMPLETED.name(), 100, report.getPreviewUrl());
         } else {
             reportRepository.updateVersionWordFile(report.getCurrentVersionId(), wordFileId, sha256(reportBytes));
         }

@@ -7,6 +7,7 @@ import com.xd.smartworksite.template.dto.TemplateQueryRequest;
 import com.xd.smartworksite.template.dto.TemplateResponse;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -44,5 +45,10 @@ public class ReportTemplateController {
     public ApiResponse<List<TemplateResponse>> listReportTemplates(TemplateQueryRequest request) {
         request.setTemplateCategory(TemplateCategory.REPORT.name());
         return ApiResponse.success(templateApplicationService.listTemplates(request));
+    }
+
+    @GetMapping("/{templateId}/variables")
+    public ApiResponse<List<String>> listReportTemplateVariables(@PathVariable Long templateId) {
+        return ApiResponse.success(templateApplicationService.listTemplateVariables(templateId));
     }
 }

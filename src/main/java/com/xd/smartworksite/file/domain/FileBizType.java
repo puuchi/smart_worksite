@@ -3,12 +3,12 @@ package com.xd.smartworksite.file.domain;
 import java.util.Locale;
 
 public enum FileBizType {
-    DOCUMENT,
-    IMAGE,
-    TEMPLATE,
-    REPORT,
-    OCR,
-    OTHER;
+    KNOWLEDGE_DOC,
+    REVIEW_DOC,
+    REPORT_TEMPLATE,
+    REVIEW_TEMPLATE,
+    REPORT_OUTPUT,
+    OCR_INPUT;
 
     public static FileBizType from(String value) {
         if (value == null || value.isBlank()) {

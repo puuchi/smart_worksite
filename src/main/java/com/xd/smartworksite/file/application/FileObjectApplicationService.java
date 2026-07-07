@@ -126,19 +126,17 @@ public class FileObjectApplicationService {
         return toResponse(fileObject);
     }
 
-    public FileAccessUrlResponse createDownloadUrl(Long fileId) {
+    public FileAccessUrlResponse createAccessUrl(Long fileId, String usage, Integer expireSeconds) {
         FileObject fileObject = findActiveFile(fileId);
         // TODO: verify current user has access to fileObject.getProjectId() before file operation.
-        return createAccessUrl(fileObject, true);
-    }
-
-    public FileAccessUrlResponse createPreviewUrl(Long fileId) {
-        FileObject fileObject = findActiveFile(fileId);
-        // TODO: verify current user has access to fileObject.getProjectId() before file operation.
-        if (!Boolean.TRUE.equals(fileObject.getPreviewSupported())) {
+        String normalizedUsage = usage == null ? "" : usage.trim().toUpperCase(Locale.ROOT);
+        if (!"DOWNLOAD".equals(normalizedUsage) && !"PREVIEW".equals(normalizedUsage)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "usage must be DOWNLOAD or PREVIEW");
+        }
+        if ("PREVIEW".equals(normalizedUsage) && !Boolean.TRUE.equals(fileObject.getPreviewSupported())) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "file preview is not supported");
         }
-        return createAccessUrl(fileObject, true);
+        return createAccessUrl(fileObject, "PREVIEW".equals(normalizedUsage), expireSeconds);
     }
 
     public void deleteFile(Long fileId) {
@@ -160,8 +158,11 @@ public class FileObjectApplicationService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "file not found"));
     }
 
-    private FileAccessUrlResponse createAccessUrl(FileObject fileObject, boolean previewSupported) {
-        long expireSeconds = fileProperties.getAccessUrlExpireSeconds();
+    private FileAccessUrlResponse createAccessUrl(FileObject fileObject, boolean preview, Integer requestedExpireSeconds) {
+        long expireSeconds = requestedExpireSeconds == null ? fileProperties.getAccessUrlExpireSeconds() : requestedExpireSeconds;
+        if (expireSeconds <= 0) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "expireSeconds must be greater than 0");
+        }
         String url;
         try {
             url = storageAdapter.createAccessUrl(fileObject.getObjectName(), Duration.ofSeconds(expireSeconds));
@@ -173,7 +174,7 @@ public class FileObjectApplicationService {
         response.setFileId(fileObject.getId());
         response.setUrl(url);
         response.setExpiresAt(LocalDateTime.now().plusSeconds(expireSeconds));
-        response.setPreviewSupported(previewSupported && Boolean.TRUE.equals(fileObject.getPreviewSupported()));
+        response.setPreviewSupported(preview && Boolean.TRUE.equals(fileObject.getPreviewSupported()));
         return response;
     }
 
@@ -301,6 +302,7 @@ public class FileObjectApplicationService {
     private FileObjectResponse toResponse(FileObject fileObject) {
         FileObjectResponse response = new FileObjectResponse();
         response.setFileId(fileObject.getId());
+        response.setObjectName(fileObject.getObjectName());
         response.setProjectId(fileObject.getProjectId());
         response.setBizType(fileObject.getBizType());
         response.setBizId(fileObject.getBizId());
