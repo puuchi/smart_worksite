@@ -179,8 +179,7 @@ com.xd.smartworksite
 ```powershell
 cd deploy
 copy .env.example .env
-docker compose -f docker-compose-env.yml --env-file .env up -d
-```
+docker compose -p smart_worksite -f docker-compose-env.yml --env-file .env up -d```
 
 ### 2. 启动后端
 
@@ -278,8 +277,8 @@ src/main/resources/db/migration
 | --- | --- |
 | `V1__init_schema.sql` | 初始化用户、角色、项目、文件、知识库、数据源、任务、审计、系统配置等基础表 |
 | `V2__extend_file_object.sql` | 扩展文件对象字段 |
-| `V2__template_report_schema.sql` | 新增模板、报告配置、报告主表和报告版本表 |
-| `V3__create_file_parse_record.sql` | 新增文件解析记录表 |
+| `V3__template_report_schema.sql` | 新增模板、报告配置、报告主表和报告版本表 |
+| `V4__create_file_parse_record.sql` | 新增文件解析记录表 |
 
 数据库结构变更必须新增Flyway脚本，不要修改已经合入并被团队使用的旧脚本。
 

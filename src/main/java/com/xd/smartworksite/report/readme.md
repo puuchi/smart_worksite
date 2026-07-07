@@ -16,7 +16,7 @@
 
 新增 Flyway 迁移脚本：
 
-- `src/main/resources/db/migration/V2__template_report_schema.sql`
+- `src/main/resources/db/migration/V3__template_report_schema.sql`
 
 新增数据表：
 
@@ -50,7 +50,7 @@ mvn test
 
 ### 对抗式审查
 
-- 检查 `V2__template_report_schema.sql` 中四张表均包含 `project_id` 和 `deleted`。
+- 检查 `V3__template_report_schema.sql` 中四张表均包含 `project_id` 和 `deleted`。
 - 检查未新增 `template_variable` 或变量解析相关表，避免超出当前实现范围。
 - 检查报告版本表记录 `source_snapshot` 和 `engine_response`，便于追踪第一版实际使用 `CRYPTO_AGENT_V3_DEFAULT` 模板。
 
