@@ -40,16 +40,28 @@ export interface LoginResponse {
 }
 
 export interface ProjectItem {
-  id: ID;
   projectId: ID;
-  name: string;
-  code: string;
-  status: Status;
-  address: string;
-  taskId?: ID;
-  fileId?: ID;
+  projectName: string;
+  projectCode: string;
+  location?: string;
+  status: string;
+  description?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProjectCreateForm {
+  projectName: string;
+  projectCode: string;
+  location?: string;
+  description?: string;
+}
+
+export interface ProjectUpdateForm {
+  projectName: string;
+  projectCode: string;
+  location?: string;
+  description?: string;
 }
 
 export interface FileObject {

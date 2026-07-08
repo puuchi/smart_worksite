@@ -60,4 +60,18 @@
         where id = #{id}
           and deleted = 0
     </update>
+
+    <update id="softDelete">
+        update project
+        set deleted = 1, updated_by = #{updatedBy}
+        where id = #{projectId}
+          and deleted = 0
+    </update>
+
+    <update id="updateStatus">
+        update project
+        set status = #{status}, updated_by = #{updatedBy}
+        where id = #{projectId}
+          and deleted = 0
+    </update>
 </mapper>
