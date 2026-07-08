@@ -185,6 +185,65 @@ export interface ReportItem {
   updatedAt: string;
 }
 
+export interface UserItem {
+  id: ID;
+  username: string;
+  displayName: string;
+  phone?: string;
+  email?: string;
+  status: string;
+  roles: string[];
+  lastLoginAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserCreateForm {
+  username: string;
+  password: string;
+  displayName: string;
+  phone?: string;
+  email?: string;
+  roleCodes?: string[];
+}
+
+export interface UserUpdateForm {
+  displayName: string;
+  phone?: string;
+  email?: string;
+  roleCodes?: string[];
+}
+
+export interface RoleItem {
+  id: ID;
+  roleCode: string;
+  roleName: string;
+  description?: string;
+  status: string;
+  permissionIds: ID[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PermissionItem {
+  id: ID;
+  permissionCode: string;
+  permissionName: string;
+  permissionType: string;
+  parentId?: ID;
+}
+
+export interface ProjectMemberItem {
+  id: ID;
+  projectId: ID;
+  userId: ID;
+  username: string;
+  displayName: string;
+  projectRole: string;
+  status: string;
+  createdAt: string;
+}
+
 export interface OcrField {
   fieldName: string;
   fieldValue: string;

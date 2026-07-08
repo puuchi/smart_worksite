@@ -2,7 +2,7 @@
 import { computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessageBox } from 'element-plus';
-import { House, ChatLineRound, DocumentChecked, Files, Notebook, Picture, SwitchButton } from '@element-plus/icons-vue';
+import { House, ChatLineRound, DocumentChecked, Files, Notebook, Picture, SwitchButton, User, Setting, UserFilled } from '@element-plus/icons-vue';
 import { useProjectStore } from '../stores/project';
 import { useUserStore } from '../stores/user';
 
@@ -17,7 +17,10 @@ const menus = [
   { path: '/qa', title: '知识问答', icon: ChatLineRound, permission: 'qa:view' },
   { path: '/review', title: '合规审查', icon: DocumentChecked, permission: 'review:view' },
   { path: '/report', title: '报告管理', icon: Files, permission: 'report:view' },
-  { path: '/ocr', title: 'OCR识别', icon: Picture, permission: 'ocr:view' }
+  { path: '/ocr', title: 'OCR识别', icon: Picture, permission: 'ocr:view' },
+  { path: '/project/members', title: '项目成员', icon: UserFilled, permission: 'project:member:manage' },
+  { path: '/system/users', title: '用户管理', icon: User, permission: 'system:user:manage' },
+  { path: '/system/roles', title: '角色权限', icon: Setting, permission: 'system:user:manage' }
 ];
 
 const visibleMenus = computed(() => menus.filter((item) => userStore.hasPermission(item.permission)));

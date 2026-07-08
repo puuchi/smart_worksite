@@ -5,6 +5,7 @@ import com.github.pagehelper.PageHelper;
 import com.xd.smartworksite.common.exception.BusinessException;
 import com.xd.smartworksite.common.result.ErrorCode;
 import com.xd.smartworksite.common.result.PageResult;
+import com.xd.smartworksite.common.security.SecurityUtils;
 import com.xd.smartworksite.project.domain.Project;
 import com.xd.smartworksite.project.dto.ProjectCreateRequest;
 import com.xd.smartworksite.project.dto.ProjectQueryRequest;
@@ -44,12 +45,15 @@ public class ProjectApplicationService {
         String projectCode = normalizeProjectCode(request.getProjectCode());
         ensureProjectCodeAvailable(projectCode, null);
 
+        Long currentUserId = SecurityUtils.getCurrentUserId();
         Project project = new Project();
         project.setProjectName(normalizeRequiredText(request.getProjectName(), "projectName is required"));
         project.setProjectCode(projectCode);
         project.setLocation(trimToNull(request.getLocation()));
         project.setDescription(trimToNull(request.getDescription()));
         project.setStatus(PROJECT_STATUS_ENABLED);
+        project.setCreatedBy(currentUserId);
+        project.setUpdatedBy(currentUserId);
         projectRepository.insert(project);
         return getProject(project.getId());
     }
@@ -64,6 +68,7 @@ public class ProjectApplicationService {
         project.setProjectCode(projectCode);
         project.setLocation(trimToNull(request.getLocation()));
         project.setDescription(trimToNull(request.getDescription()));
+        project.setUpdatedBy(SecurityUtils.getCurrentUserId());
         projectRepository.update(project);
         return getProject(projectId);
     }
