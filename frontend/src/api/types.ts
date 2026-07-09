@@ -1,5 +1,5 @@
-﻿export type ID = string | number;
-export type Status = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'SUCCESS' | 'FAILED' | 'ACTIVE' | 'DISABLED' | 'ARCHIVED';
+export type ID = string | number;
+export type Status = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'SUCCESS' | 'FAILED' | 'ACTIVE' | 'ENABLED' | 'DISABLED' | 'ARCHIVED' | 'CANCELLED';
 
 export interface PageQuery {
   pageNo?: number;
@@ -46,6 +46,7 @@ export interface ProjectItem {
   code: string;
   status: Status;
   address: string;
+  description?: string;
   taskId?: ID;
   fileId?: ID;
   createdAt: string;
@@ -229,4 +230,54 @@ export interface TaskDetail {
   stageLogs: TaskStageLog[];
   createdAt: string;
   updatedAt: string;
+}
+
+
+export interface ProjectMember {
+  id: ID;
+  projectId: ID;
+  userId: ID;
+  realName: string;
+  roleName: string;
+  permissions: string[];
+  status: Status;
+  createdAt: string;
+}
+
+export interface DataSourceItem {
+  id: ID;
+  dataSourceId: ID;
+  projectId: ID;
+  name: string;
+  type: 'MYSQL' | 'POSTGRESQL' | 'SQLSERVER' | 'ORACLE' | string;
+  host: string;
+  port?: number;
+  databaseName: string;
+  username?: string;
+  status: Status;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DataSourceQueryResult {
+  sql?: string;
+  columns: string[];
+  rows: Record<string, unknown>[];
+  summary?: string;
+}
+
+export interface AuditLog {
+  id: ID;
+  projectId?: ID;
+  operatorId?: ID;
+  operatorName: string;
+  action: string;
+  module: string;
+  targetType?: string;
+  targetId?: ID;
+  result: 'SUCCESS' | 'FAILED' | string;
+  ip?: string;
+  detail?: string;
+  createdAt: string;
 }

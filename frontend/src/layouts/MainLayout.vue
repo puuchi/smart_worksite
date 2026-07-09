@@ -1,8 +1,8 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessageBox } from 'element-plus';
-import { House, ChatLineRound, DocumentChecked, Files, Notebook, Picture, SwitchButton } from '@element-plus/icons-vue';
+import { ChatLineRound, DocumentChecked, Files, FolderOpened, House, Notebook, Picture, SwitchButton, Tickets } from '@element-plus/icons-vue';
 import { useProjectStore } from '../stores/project';
 import { useUserStore } from '../stores/user';
 
@@ -13,6 +13,9 @@ const userStore = useUserStore();
 
 const menus = [
   { path: '/dashboard', title: '首页工作台', icon: House, permission: 'dashboard:view' },
+  { path: '/projects', title: '项目与权限', icon: FolderOpened, permission: 'project:view' },
+  { path: '/files', title: '文件管理', icon: Files, permission: 'file:view' },
+  { path: '/templates', title: '模板中心', icon: Tickets, permission: 'template:view' },
   { path: '/knowledge', title: '知识库管理', icon: Notebook, permission: 'knowledge:view' },
   { path: '/qa', title: '知识问答', icon: ChatLineRound, permission: 'qa:view' },
   { path: '/review', title: '合规审查', icon: DocumentChecked, permission: 'review:view' },
@@ -39,22 +42,35 @@ async function logout() {
 <template>
   <el-container class="main-layout">
     <el-aside width="236px" class="sidebar">
-      <div class="brand"><div class="brand-mark">AI</div><div><strong>智慧工地</strong><span>大模型应用系统</span></div></div>
+      <div class="brand">
+        <div class="brand-mark">AI</div>
+        <div><strong>智慧工地</strong><span>大模型应用系统</span></div>
+      </div>
       <el-menu :default-active="activeMenu" router class="side-menu">
-        <el-menu-item v-for="item in visibleMenus" :key="item.path" :index="item.path"><el-icon><component :is="item.icon" /></el-icon><span>{{ item.title }}</span></el-menu-item>
+        <el-menu-item v-for="item in visibleMenus" :key="item.path" :index="item.path">
+          <el-icon><component :is="item.icon" /></el-icon>
+          <span>{{ item.title }}</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
       <el-header class="topbar" height="64px">
         <div>
           <div class="current-project">当前项目：{{ currentProject?.name || '暂无项目' }}</div>
-          <div class="project-meta">{{ currentProject?.code || '-' }} · {{ currentProject?.address || '-' }}</div>
+          <div class="project-meta">{{ currentProject?.code || '-' }} / {{ currentProject?.address || '-' }}</div>
         </div>
         <div class="top-actions">
           <el-select v-model="projectStore.currentProjectId" style="width: 240px" :loading="projectStore.loading" @change="projectStore.switchProject">
-            <el-option v-for="project in projectStore.projects" :key="project.projectId" :label="project.name" :value="String(project.projectId)" :disabled="project.status !== 'ACTIVE'" />
+            <el-option v-for="project in projectStore.projects" :key="project.projectId" :label="project.name" :value="String(project.projectId)" :disabled="!['ACTIVE', 'ENABLED'].includes(project.status)" />
           </el-select>
-          <el-dropdown><span class="user-chip">{{ userStore.displayName }} / {{ userStore.roles[0] || '业务人员' }}</span><template #dropdown><el-dropdown-menu><el-dropdown-item :icon="SwitchButton" @click="logout">退出登录</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
+          <el-dropdown>
+            <span class="user-chip">{{ userStore.displayName }} / {{ userStore.roles[0] || '业务人员' }}</span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item :icon="SwitchButton" @click="logout">退出登录</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
       </el-header>
       <el-main class="content"><router-view :key="projectStore.currentProjectId" /></el-main>
