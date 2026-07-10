@@ -2,7 +2,7 @@
 import { computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessageBox } from 'element-plus';
-import { ChatLineRound, DocumentChecked, Files, FolderOpened, House, Notebook, Picture, SwitchButton, Tickets } from '@element-plus/icons-vue';
+import { ChatLineRound, DocumentChecked, Files, Folder, FolderOpened, House, Notebook, Picture, Setting, SwitchButton, Tickets, User, UserFilled } from '@element-plus/icons-vue';
 import { useProjectStore } from '../stores/project';
 import { useUserStore } from '../stores/user';
 
@@ -12,15 +12,19 @@ const projectStore = useProjectStore();
 const userStore = useUserStore();
 
 const menus = [
-  { path: '/dashboard', title: '首页工作台', icon: House, permission: 'dashboard:view' },
-  { path: '/projects', title: '项目与权限', icon: FolderOpened, permission: 'project:view' },
-  { path: '/files', title: '文件管理', icon: Files, permission: 'file:view' },
-  { path: '/templates', title: '模板中心', icon: Tickets, permission: 'template:view' },
-  { path: '/knowledge', title: '知识库管理', icon: Notebook, permission: 'knowledge:view' },
-  { path: '/qa', title: '知识问答', icon: ChatLineRound, permission: 'qa:view' },
-  { path: '/review', title: '合规审查', icon: DocumentChecked, permission: 'review:view' },
-  { path: '/report', title: '报告管理', icon: Files, permission: 'report:view' },
-  { path: '/ocr', title: 'OCR识别', icon: Picture, permission: 'ocr:view' }
+  { path: '/dashboard', title: '?????', icon: House, permission: 'dashboard:view' },
+  { path: '/projects', title: '?????', icon: FolderOpened, permission: 'project:view' },
+  { path: '/files', title: '????', icon: Files, permission: 'file:view' },
+  { path: '/templates', title: '????', icon: Tickets, permission: 'template:view' },
+  { path: '/knowledge', title: '?????', icon: Notebook, permission: 'knowledge:view' },
+  { path: '/qa', title: '????', icon: ChatLineRound, permission: 'qa:view' },
+  { path: '/review', title: '????', icon: DocumentChecked, permission: 'review:view' },
+  { path: '/report', title: '????', icon: Files, permission: 'report:view' },
+  { path: '/ocr', title: 'OCR??', icon: Picture, permission: 'ocr:view' },
+  { path: '/project/manage', title: '????', icon: Folder, permission: 'project:manage' },
+  { path: '/project/members', title: '????', icon: UserFilled, permission: 'project:member:manage' },
+  { path: '/system/users', title: '????', icon: User, permission: 'system:user:manage' },
+  { path: '/system/roles', title: '????', icon: Setting, permission: 'system:user:manage' }
 ];
 
 const visibleMenus = computed(() => menus.filter((item) => userStore.hasPermission(item.permission)));
@@ -33,7 +37,7 @@ onMounted(async () => {
 });
 
 async function logout() {
-  await ElMessageBox.confirm('确认退出当前账号？', '退出登录', { type: 'warning' });
+  await ElMessageBox.confirm('?????????', '????', { type: 'warning' });
   await userStore.logout();
   router.replace('/login');
 }
@@ -44,7 +48,7 @@ async function logout() {
     <el-aside width="236px" class="sidebar">
       <div class="brand">
         <div class="brand-mark">AI</div>
-        <div><strong>智慧工地</strong><span>大模型应用系统</span></div>
+        <div><strong>????</strong><span>???????</span></div>
       </div>
       <el-menu :default-active="activeMenu" router class="side-menu">
         <el-menu-item v-for="item in visibleMenus" :key="item.path" :index="item.path">
@@ -56,18 +60,18 @@ async function logout() {
     <el-container>
       <el-header class="topbar" height="64px">
         <div>
-          <div class="current-project">当前项目：{{ currentProject?.name || '暂无项目' }}</div>
-          <div class="project-meta">{{ currentProject?.code || '-' }} / {{ currentProject?.address || '-' }}</div>
+          <div class="current-project">?????{{ currentProject?.name || currentProject?.projectName || '????' }}</div>
+          <div class="project-meta">{{ currentProject?.code || currentProject?.projectCode || '-' }} / {{ currentProject?.address || currentProject?.location || '-' }}</div>
         </div>
         <div class="top-actions">
           <el-select v-model="projectStore.currentProjectId" style="width: 240px" :loading="projectStore.loading" @change="projectStore.switchProject">
-            <el-option v-for="project in projectStore.projects" :key="project.projectId" :label="project.name" :value="String(project.projectId)" :disabled="!['ACTIVE', 'ENABLED'].includes(project.status)" />
+            <el-option v-for="project in projectStore.projects" :key="project.projectId" :label="project.name || project.projectName" :value="String(project.projectId)" :disabled="!['ACTIVE', 'ENABLED'].includes(project.status)" />
           </el-select>
           <el-dropdown>
-            <span class="user-chip">{{ userStore.displayName }} / {{ userStore.roles[0] || '业务人员' }}</span>
+            <span class="user-chip">{{ userStore.displayName }} / {{ userStore.roles[0] || '????' }}</span>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item :icon="SwitchButton" @click="logout">退出登录</el-dropdown-item>
+                <el-dropdown-item :icon="SwitchButton" @click="logout">????</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
