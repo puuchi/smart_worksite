@@ -30,6 +30,16 @@ const form = reactive<{ reportName: string; reportType: string; templateId: ID |
 const templateEmpty = computed(() => !templates.value.length && !templateWarning.value);
 const canCreate = computed(() => Boolean(form.reportName.trim() && form.reportType && form.templateId));
 
+const downloadableStatuses = new Set(['COMPLETED']);
+
+function normalizeStatus(status?: string) {
+  return (status || '').toUpperCase();
+}
+
+function canDownloadReport(row: ReportItem) {
+  return downloadableStatuses.has(normalizeStatus(row.status));
+}
+
 async function loadData() {
   loading.value = true;
   error.value = '';
@@ -98,6 +108,7 @@ async function submitCreate() {
 }
 
 async function handleDownload(row: ReportItem) {
+  if (!canDownloadReport(row)) return ElMessage.warning(`当前报告状态为 ${row.status}，尚不能下载`);
   downloadingId.value = row.reportId;
   error.value = '';
   try {
@@ -134,7 +145,8 @@ onMounted(loadData);
         { prop: 'keyword', label: '关键词' },
         { prop: 'status', label: '状态', type: 'select', options: [
           { label: '已完成', value: 'COMPLETED' },
-          { label: '生成中', value: 'GENERATING' },
+          { label: '待生成', value: 'PENDING' },
+          { label: '生成中', value: 'PROCESSING' },
           { label: '失败', value: 'FAILED' }
         ] }
       ]"
@@ -161,7 +173,7 @@ onMounted(loadData);
         <el-table-column label="操作" width="260">
           <template #default="{ row }">
             <el-button link type="primary" @click="$router.push(`/report/${row.reportId}`)">详情</el-button>
-            <el-button link :loading="String(downloadingId) === String(row.reportId)" @click="handleDownload(row)">下载</el-button>
+            <el-button link :loading="String(downloadingId) === String(row.reportId)" :disabled="!canDownloadReport(row)" @click="handleDownload(row)">下载</el-button>
             <el-button link disabled title="后端接口待提供">分享</el-button>
             <el-button link disabled title="后端接口待提供">归档</el-button>
           </template>

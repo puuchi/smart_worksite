@@ -115,6 +115,7 @@ Python 智能算法服务
 - 项目管理、项目成员、用户管理、角色权限页面。
 - 403、404 页面。
 - 通用上传、表格、搜索、弹窗、状态、进度、JSON 查看、下载组件。
+- 前端长任务与状态机操作会按后端允许状态禁用非法按钮：任务只在 `FAILED` 可重试、等待/运行状态可取消；文件解析仅成功可查看内容、失败可重试；报告仅完成可下载，生成中不可重复生成。
 
 ### 规划中
 
@@ -379,7 +380,7 @@ Auth write rule: user, password, role, role-permission, project-member, and last
 | GET | `/api/knowledge-bases/{knowledgeBaseId}/documents` | 分页查询知识库文档 |
 | GET | `/api/knowledge-documents/{documentId}` | 查询知识库文档详情 |
 | DELETE | `/api/knowledge-documents/{documentId}` | 删除知识库文档 |
-| POST | `/api/knowledge-documents/{documentId}/index` | 创建知识库文档入库任务，返回 `INDEXING` 与 `taskId`，由任务 outbox/Worker 异步调用 Python RAG 索引 |
+| POST | `/api/knowledge-documents/{documentId}/index` | 创建知识库文档入库任务，仅允许 `PENDING`、`FAILED` 文档提交；返回 `INDEXING` 与 `taskId`，由任务 outbox/Worker 异步调用 Python RAG 索引 |
 
 Knowledge write rule: knowledge-base updates must check affected rows; document uploads must verify generated IDs and read back persisted records before success; `INDEXING`, `SUCCESS`, and `FAILED` indexing status writes must check affected rows, and failure-state persistence failures must surface conflict errors with the original error retained.
 

@@ -9,12 +9,16 @@ const typeMap: Record<string, 'success' | 'warning' | 'danger' | 'info' | 'prima
   DONE: 'success',
   GENERATING: 'warning',
   PROCESSING: 'warning',
+  INDEXING: 'warning',
   RUNNING: 'warning',
+  QUEUED: 'warning',
   PENDING: 'warning',
+  RETRYING: 'warning',
   FAILED: 'danger',
   ERROR: 'danger',
   DISABLED: 'info',
   ARCHIVED: 'info',
+  CANCELED: 'info',
   CANCELLED: 'info'
 };
 

@@ -1,5 +1,5 @@
 ﻿export type ID = string | number;
-export type Status = 'PENDING' | 'QUEUED' | 'RUNNING' | 'PROCESSING' | 'COMPLETED' | 'SUCCESS' | 'FAILED' | 'RETRYING' | 'CANCELED' | 'ACTIVE' | 'ENABLED' | 'DISABLED' | 'ARCHIVED';
+export type Status = 'PENDING' | 'QUEUED' | 'RUNNING' | 'PROCESSING' | 'INDEXING' | 'COMPLETED' | 'SUCCESS' | 'FAILED' | 'RETRYING' | 'CANCELED' | 'ACTIVE' | 'ENABLED' | 'DISABLED' | 'ARCHIVED';
 
 export interface PageQuery {
   pageNo?: number;

@@ -18,6 +18,21 @@ const notFound = ref(false);
 const report = ref<ReportItem | null>(null);
 const logs = ref<TaskStageLog[]>([]);
 
+const downloadableStatuses = new Set(['COMPLETED']);
+const regeneratableStatuses = new Set(['COMPLETED', 'FAILED', 'ARCHIVED']);
+
+function normalizeStatus(status?: string) {
+  return (status || '').toUpperCase();
+}
+
+function canDownloadReport(item: ReportItem) {
+  return downloadableStatuses.has(normalizeStatus(item.status));
+}
+
+function canRegenerateReport(item: ReportItem) {
+  return regeneratableStatuses.has(normalizeStatus(item.status));
+}
+
 function isNotFoundError(err: unknown) {
   const message = err instanceof Error ? err.message : String(err || '');
   return message.includes('404') || message.includes('不存在') || message.includes('not found') || message.includes('Not Found');
@@ -41,6 +56,10 @@ async function loadData() {
 
 async function handleDownload() {
   if (!report.value) return;
+  if (!canDownloadReport(report.value)) {
+    error.value = `当前报告状态为 ${report.value.status}，尚不能下载`;
+    return;
+  }
   downloading.value = true;
   error.value = '';
   try {
@@ -54,6 +73,10 @@ async function handleDownload() {
 
 async function handleRegenerate() {
   if (!report.value) return;
+  if (!canRegenerateReport(report.value)) {
+    error.value = `当前报告状态为 ${report.value.status}，不能重复发起生成`;
+    return;
+  }
   regenerating.value = true;
   error.value = '';
   try {
@@ -87,8 +110,8 @@ onMounted(loadData);
           <p class="page-desc">版本、状态、预览、下载和重新生成。</p>
         </div>
         <el-space>
-          <el-button type="primary" plain :loading="downloading" @click="handleDownload">下载报告</el-button>
-          <el-button :loading="regenerating" @click="handleRegenerate">重新生成</el-button>
+          <el-button type="primary" plain :loading="downloading" :disabled="!canDownloadReport(report)" @click="handleDownload">下载报告</el-button>
+          <el-button :loading="regenerating" :disabled="!canRegenerateReport(report)" @click="handleRegenerate">重新生成</el-button>
           <el-button disabled title="后端接口待提供">版本列表</el-button>
         </el-space>
       </div>

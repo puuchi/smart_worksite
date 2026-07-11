@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import AppTable from '../../components/common/AppTable.vue';
@@ -33,6 +33,20 @@ const bizTypeOptions = [
   { label: 'OCR输入', value: 'OCR_INPUT' },
   { label: '报告结果', value: 'REPORT_OUTPUT' }
 ];
+const contentReadyStatuses = new Set(['SUCCESS']);
+const retryableParseStatuses = new Set(['FAILED']);
+
+function normalizeStatus(status?: string) {
+  return (status || '').toUpperCase();
+}
+
+function canShowParseContent(record: FileParseRecord) {
+  return contentReadyStatuses.has(normalizeStatus(record.status));
+}
+
+function canRetryParse(record: FileParseRecord) {
+  return retryableParseStatuses.has(normalizeStatus(record.status));
+}
 
 async function loadFiles() {
   if (!projectId.value) {
@@ -101,6 +115,7 @@ async function parseFile(row: FileObject) {
 }
 
 async function showContent(record: FileParseRecord) {
+  if (!canShowParseContent(record)) return ElMessage.warning(`当前解析状态为 ${record.status}，结果内容尚不可查看`);
   try {
     const result = await fetchFileParseContent(record.recordId);
     parsedContent.value = result.content;
@@ -138,6 +153,7 @@ async function removeFile(row: FileObject) {
 
 async function retryParse(record: FileParseRecord) {
   if (!record.recordId) return ElMessage.warning('缺少解析记录编号，无法重试');
+  if (!canRetryParse(record)) return ElMessage.warning(`当前解析状态为 ${record.status}，不能重试解析`);
   retryingId.value = record.recordId;
   try {
     await retryFileParse(record.recordId);
@@ -179,7 +195,7 @@ onMounted(async () => { if (!projectStore.currentProject) await projectStore.fet
       <AppTable :data="parses" :columns="[{prop:'recordId',label:'记录ID',width:100},{prop:'parseType',label:'解析类型'},{prop:'status',label:'状态',slot:'status'},{prop:'progress',label:'进度'}]">
         <template #empty><EmptyState description="选择文件后查看解析记录" /></template>
         <template #status="{ row }"><StatusTag :status="row.status" /></template>
-        <el-table-column label="操作" width="150"><template #default="{ row }"><el-button link type="primary" @click="showContent(row)">内容</el-button><el-button link :loading="retryingId === row.recordId" @click="retryParse(row)">重试解析</el-button></template></el-table-column>
+        <el-table-column label="操作" width="150"><template #default="{ row }"><el-button link type="primary" :disabled="!canShowParseContent(row)" @click="showContent(row)">内容</el-button><el-button link :loading="retryingId === row.recordId" :disabled="!canRetryParse(row)" @click="retryParse(row)">重试解析</el-button></template></el-table-column>
       </AppTable>
     </el-card>
     <el-dialog v-model="contentVisible" title="解析内容" width="760px"><pre class="content-box">{{ parsedContent }}</pre></el-dialog>

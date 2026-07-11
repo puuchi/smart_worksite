@@ -140,6 +140,7 @@ Business modules may use these layers as needed: `controller`, `application`, `d
 - Knowledge document uploads must verify generated IDs and read back inserted records before returning success; missing IDs or unreadable inserts must fail before any indexing work starts.
 - Knowledge document indexing must create `KNOWLEDGE_INDEXING` async tasks and call Python RAG indexing through the AI adapter. Java may only orchestrate task state, parse-content loading, project isolation, and error recording; it must not access vector databases, run embeddings, or mark success when parsing or Python indexing fails.
 - Knowledge indexing state transitions to `INDEXING`, `SUCCESS`, and `FAILED` must check affected rows. If failure-state persistence itself fails, the worker must fail visibly with the original error included instead of losing observability.
+- Knowledge document index task creation is allowed only from `PENDING` or `FAILED`. `INDEXING` and `SUCCESS` documents must not expose a repeat-submit frontend action; if a stale client submits anyway, the backend conflict is the correct fail-fast result.
 - OCR module implementation is owned outside this workstream; do not add or refactor OCR business code unless the user explicitly reassigns it.
 
 ## Responses And Exceptions
@@ -220,6 +221,8 @@ Request IDs are handled by `common.config.RequestIdFilter`. The response header 
 - Reusable upload, table, search, dialog form, status tag, progress, JSON viewer, empty state, and download behavior should be implemented as shared components.
 - Every page must handle loading, empty, and error states.
 - Long-running tasks such as report generation, OCR recognition, and knowledge indexing must show status, progress, or stage logs.
+- Frontend action buttons for state-machine APIs must follow backend allowed transitions: disable retry/cancel/download/content/regenerate actions when the current row status cannot accept that operation, while leaving backend fail-fast conflicts intact for stale clients.
+- Knowledge document indexing actions must be state-aware: allow submit/retry only for `PENDING` and `FAILED`, and disable repeat submission for `INDEXING` or `SUCCESS`.
 - AI results should expose traceable information where available, such as sources, confidence, raw JSON, or document references.
 - Frontend report-template upload APIs must pass explicit `templateName` and `templateType`; do not derive them from the filename or rely on backend fallback metadata.
 

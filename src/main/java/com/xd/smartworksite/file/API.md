@@ -56,7 +56,7 @@ QWEN_VL_MODEL=qwen-vl-plus
 ### 1. 上传文件
 
 ```text
-POST /api/files/upload
+POST /api/files
 Content-Type: multipart/form-data
 ```
 
@@ -75,7 +75,7 @@ Content-Type: multipart/form-data
 ```bash
 printf 'hello smart worksite file module\n' > /tmp/sw-test.txt
 
-curl --noproxy '*' -X POST http://127.0.0.1:8080/api/files/upload \
+curl --noproxy '*' -X POST http://127.0.0.1:8080/api/files \
   -F 'file=@/tmp/sw-test.txt;type=text/plain' \
   -F 'projectId=1' \
   -F 'bizType=DOCUMENT' \
@@ -412,7 +412,7 @@ curl --noproxy '*' -X POST http://127.0.0.1:8080/api/file-parse-records/1/retry
 上传图片：
 
 ```bash
-curl --noproxy '*' -X POST http://127.0.0.1:8080/api/files/upload \
+curl --noproxy '*' -X POST http://127.0.0.1:8080/api/files \
   -F 'file=@/tmp/test.jpg;type=image/jpeg' \
   -F 'projectId=1' \
   -F 'bizType=IMAGE' \
@@ -444,7 +444,7 @@ curl --noproxy '*' http://127.0.0.1:8080/api/file-parse-records/{recordId}/conte
 上传 PDF：
 
 ```bash
-curl --noproxy '*' -X POST http://127.0.0.1:8080/api/files/upload \
+curl --noproxy '*' -X POST http://127.0.0.1:8080/api/files \
   -F 'file=@/tmp/test.pdf;type=application/pdf' \
   -F 'projectId=1' \
   -F 'bizType=DOCUMENT'
@@ -453,7 +453,7 @@ curl --noproxy '*' -X POST http://127.0.0.1:8080/api/files/upload \
 上传 DOCX：
 
 ```bash
-curl --noproxy '*' -X POST http://127.0.0.1:8080/api/files/upload \
+curl --noproxy '*' -X POST http://127.0.0.1:8080/api/files \
   -F 'file=@/tmp/test.docx;type=application/vnd.openxmlformats-officedocument.wordprocessingml.document' \
   -F 'projectId=1' \
   -F 'bizType=DOCUMENT'

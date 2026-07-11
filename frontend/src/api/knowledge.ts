@@ -65,12 +65,12 @@ export async function triggerDocumentIndex(documentId: ID) {
   if (useMock) {
     const item = mockDocumentState.find((doc) => String(doc.documentId) === String(documentId));
     if (item) {
-      item.indexStatus = 'QUEUED';
+      item.indexStatus = 'INDEXING';
       item.updatedAt = new Date().toISOString();
       saveMockState();
       return item;
     }
-    return { ...mockKnowledgeDocuments[0], documentId, indexStatus: 'QUEUED' } satisfies KnowledgeDocument;
+    return { ...mockKnowledgeDocuments[0], documentId, indexStatus: 'INDEXING' } satisfies KnowledgeDocument;
   }
   return request.post<KnowledgeDocument>(`/knowledge-documents/${documentId}/index`);
 }

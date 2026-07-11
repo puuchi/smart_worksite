@@ -24,6 +24,23 @@ const selectedFiles = ref<File[]>([]);
 const indexingId = ref<ID>('');
 const form = reactive({ name: '', description: '' });
 const activeBase = computed(() => bases.value.find((item) => String(item.knowledgeBaseId) === String(activeBaseId.value)) || null);
+const indexableStatuses = new Set(['PENDING', 'FAILED']);
+
+function normalizeStatus(status?: string) {
+  return (status || '').toUpperCase();
+}
+
+function canSubmitIndex(row: KnowledgeDocument) {
+  return indexableStatuses.has(normalizeStatus(row.indexStatus));
+}
+
+function indexActionText(row: KnowledgeDocument) {
+  const status = normalizeStatus(row.indexStatus);
+  if (status === 'INDEXING') return '入库中';
+  if (status === 'SUCCESS') return '已入库';
+  if (status === 'FAILED') return '重新入库';
+  return '入库处理';
+}
 
 async function loadBases(selectId?: ID) {
   loading.value = true;
@@ -86,6 +103,7 @@ async function uploadDocs() {
 async function handleIndex(row: KnowledgeDocument) {
   const documentId = row.documentId;
   if (!documentId) return ElMessage.warning('文档ID缺失，无法触发入库');
+  if (!canSubmitIndex(row)) return ElMessage.warning(`当前文档状态为 ${row.indexStatus}，不能重复提交入库任务`);
   indexingId.value = documentId;
   docsError.value = '';
   try { await triggerDocumentIndex(documentId); ElMessage.success('入库任务已提交'); await loadDocs(activeBaseId.value); }
@@ -105,7 +123,7 @@ onMounted(loadBases);
     <template v-else>
       <el-card class="work-card"><div class="base-list"><button v-for="base in bases" :key="base.knowledgeBaseId" type="button" class="base-card" :class="{ active: String(activeBaseId) === String(base.knowledgeBaseId) }" @click="activeBaseId = base.knowledgeBaseId"><strong>{{ base.name }}</strong><span>{{ base.description || '暂无描述' }}</span><small>领域：{{ base.domain || '-' }}</small></button></div><p v-if="activeBase" class="muted">当前知识库：{{ activeBase.name }} / <StatusTag :status="activeBase.status" /></p></el-card>
       <el-card class="work-card"><h3 class="panel-title">上传文档</h3><AppUpload accept=".doc,.docx,.pdf,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.txt,.md" :uploading="uploading" @change="selectedFiles = $event" /><el-button type="primary" style="margin-top: 12px" :loading="uploading" :disabled="!activeBaseId" @click="uploadDocs">上传到当前知识库</el-button></el-card>
-      <el-card class="work-card"><h3 class="panel-title">文档处理状态</h3><el-alert v-if="docsError" :title="docsError" type="error" show-icon :closable="false" style="margin-bottom: 12px" /><AppTable :loading="docsLoading" :data="docs" :columns="[{ prop: 'title', label: '文档名称' }, { prop: 'sourceType', label: '来源类型', width: 120 }, { prop: 'indexStatus', label: '入库状态', slot: 'index', width: 110 }, { prop: 'errorMessage', label: '说明' }, { prop: 'createdAt', label: '创建时间', width: 180 }]"><template #empty><EmptyState description="暂无知识库文档，可先上传项目资料。" /></template><template #index="{ row }"><StatusTag :status="row.indexStatus" /></template><el-table-column label="操作" width="160"><template #default="{ row }"><el-button link type="primary" :loading="String(indexingId) === String(row.documentId)" @click="handleIndex(row)">入库处理</el-button></template></el-table-column></AppTable></el-card>
+      <el-card class="work-card"><h3 class="panel-title">文档处理状态</h3><el-alert v-if="docsError" :title="docsError" type="error" show-icon :closable="false" style="margin-bottom: 12px" /><AppTable :loading="docsLoading" :data="docs" :columns="[{ prop: 'title', label: '文档名称' }, { prop: 'sourceType', label: '来源类型', width: 120 }, { prop: 'indexStatus', label: '入库状态', slot: 'index', width: 110 }, { prop: 'errorMessage', label: '说明' }, { prop: 'createdAt', label: '创建时间', width: 180 }]"><template #empty><EmptyState description="暂无知识库文档，可先上传项目资料。" /></template><template #index="{ row }"><StatusTag :status="row.indexStatus" /></template><el-table-column label="操作" width="160"><template #default="{ row }"><el-button link type="primary" :loading="String(indexingId) === String(row.documentId)" :disabled="!canSubmitIndex(row)" @click="handleIndex(row)">{{ indexActionText(row) }}</el-button></template></el-table-column></AppTable></el-card>
     </template>
     <el-dialog v-model="dialogVisible" title="新建知识库" width="520px"><el-form label-width="96px"><el-form-item label="知识库名称"><el-input v-model="form.name" placeholder="请输入知识库名称" /></el-form-item><el-form-item label="描述"><el-input v-model="form.description" type="textarea" placeholder="请输入知识库描述" /></el-form-item></el-form><template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreate">创建</el-button></template></el-dialog>
   </div>
