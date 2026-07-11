@@ -49,7 +49,7 @@ export async function uploadFile(projectId: ID, file: File, businessType = 'KNOW
 
 export async function fetchFiles(params: PageQuery & { bizType?: string; bizId?: ID } = {}) {
   if (useMock) return { pageNo: params.pageNo || 1, pageSize: params.pageSize || 20, total: mockFiles.length, records: mockFiles } satisfies PageResult<FileObject>;
-  if (!params.projectId) throw new Error('?????? projectId');
+  if (!params.projectId) throw new Error('文件列表缺少 projectId');
   return request.get<PageResult<FileObject>>('/files', { params: cleanParams(params as Record<string, unknown>) });
 }
 
@@ -74,7 +74,7 @@ export async function deleteFile(fileId: ID) {
 export async function downloadByFileId(fileId: ID, filename?: string) {
   if (useMock) return downloadFile('', { filename, data: 'mock file content' });
   const access = await fetchFileDownloadUrl(fileId);
-  if (!access.url) throw new Error('?????????????????? URL ???');
+  if (!access.url) throw new Error('文件下载地址为空，请检查后端文件访问 URL 接口。');
   return downloadFile(access.url, { filename });
 }
 

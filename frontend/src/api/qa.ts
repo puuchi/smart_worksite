@@ -8,9 +8,7 @@ const mockSessions = [...mockQaSessions];
 const mockMessages: QaMessageWithExtra[] = [...mockQaMessages];
 const feedbackState: Record<string, boolean> = {};
 
-function mockId() {
-  return Number(`${Date.now()}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`);
-}
+function mockId() { return Number(`${Date.now()}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`); }
 
 function buildAssistantMessage(sessionId: ID, projectId: ID, question: string): QaMessageWithExtra {
   const now = new Date().toISOString();
@@ -20,14 +18,14 @@ function buildAssistantMessage(sessionId: ID, projectId: ID, question: string): 
     sessionId,
     projectId,
     question,
-    answer: `???????????${question}??????????????????????????`,
+    answer: `已结合项目知识库分析：${question}。建议优先核查方案交底、现场验收记录和整改闭环情况。`,
     routeMode: 'MIXED',
     status: 'SUCCESS',
     createdAt: now,
     updatedAt: now,
     references: [
-      { title: '???????', sourceType: 'KNOWLEDGE', page: '?5?', score: 0.91, documentId: 3001 },
-      { title: '???????', sourceType: 'KNOWLEDGE', page: '?2?', score: 0.84, documentId: 3002 }
+      { title: '项目安全规范库', sourceType: 'KNOWLEDGE', page: '第5页', score: 0.91, documentId: 3001 },
+      { title: '施工质量验收库', sourceType: 'KNOWLEDGE', page: '第2章', score: 0.84, documentId: 3002 }
     ],
     sqlResult: { sql: 'select risk_level,count(*) as total from check_items group by risk_level', table: 'check_items', rows: [{ risk_level: 'HIGH', total: 2 }, { risk_level: 'MEDIUM', total: 5 }] }
   };
@@ -37,7 +35,7 @@ export async function createQaSession(data: { projectId: ID; title?: string }) {
   if (useMock) {
     const now = new Date().toISOString();
     const id = mockId();
-    const created = { sessionId: id, projectId: data.projectId, title: data.title || '????', status: 'ACTIVE', createdAt: now, updatedAt: now } satisfies QaSession;
+    const created = { sessionId: id, projectId: data.projectId, title: data.title || '新建会话', status: 'ACTIVE', createdAt: now, updatedAt: now } satisfies QaSession;
     mockSessions.unshift(created);
     return created;
   }
@@ -65,12 +63,6 @@ export async function sendQuestion(sessionId: ID, data: { projectId: ID; questio
 }
 
 export async function submitFeedback(messageId: ID, useful: boolean) {
-  if (useMock) {
-    feedbackState[String(messageId)] = useful;
-    return { messageId, useful };
-  }
-  return request.post(`/qa/messages/${messageId}/feedback`, {
-    feedbackType: useful ? 'LIKE' : 'DISLIKE',
-    extra: { useful }
-  });
+  if (useMock) { feedbackState[String(messageId)] = useful; return { messageId, useful }; }
+  return request.post(`/qa/messages/${messageId}/feedback`, { feedbackType: useful ? 'LIKE' : 'DISLIKE', extra: { useful } });
 }

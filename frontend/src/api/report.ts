@@ -73,6 +73,6 @@ export async function fetchReportDownloadUrl(reportId: ID, format: 'WORD' | 'PDF
 export async function downloadReport(reportId: ID, format: 'WORD' | 'PDF' = 'WORD', filename?: string) {
   if (useMock) return downloadFile('', { filename: filename || `report-${reportId}.${format === 'PDF' ? 'pdf' : 'docx'}`, data: 'mock report content' });
   const url = await fetchReportDownloadUrl(reportId, format);
-  if (!url) throw new Error('????????????????????');
+  if (!url) throw new Error('报告下载地址为空，请检查后端报告下载接口');
   return downloadFile(url, { filename });
 }
