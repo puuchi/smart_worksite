@@ -1,8 +1,9 @@
-﻿import request from '../utils/request';
+import request from '../utils/request';
 import { mockTaskDetail, mockTaskStages } from '../mocks/task';
 import type { ID, TaskDetail, TaskStageLog } from './types';
+import { useModuleMock } from './mock';
 
-const useMock = import.meta.env.VITE_USE_MOCK === 'true';
+const useMock = useModuleMock('VITE_USE_TASK_MOCK', true);
 
 export async function fetchTaskDetail(taskId: ID) {
   if (useMock) return { ...mockTaskDetail, taskId } satisfies TaskDetail;

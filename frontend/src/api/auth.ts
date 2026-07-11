@@ -1,8 +1,9 @@
-﻿import request from '../utils/request';
+import request from '../utils/request';
 import { mockLoginResponse, mockUser } from '../mocks/auth';
 import type { LoginRequest, LoginResponse, UserInfo } from './types';
+import { useModuleMock } from './mock';
 
-const useMock = import.meta.env.VITE_USE_MOCK === 'true';
+const useMock = useModuleMock('VITE_USE_AUTH_MOCK', true);
 
 export async function login(data: LoginRequest) {
   if (useMock) return { ...mockLoginResponse, accessToken: `mock-token-${Date.now()}`, user: { ...mockUser, username: data.username } } satisfies LoginResponse;

@@ -50,12 +50,18 @@ export interface LoginResponse {
 }
 
 export interface ProjectItem {
+  id?: ID;
   projectId: ID;
+  name?: string;
+  code?: string;
+  address?: string;
   projectName: string;
   projectCode: string;
   location?: string;
-  status: string;
+  status: Status | string;
   description?: string;
+  taskId?: ID;
+  fileId?: ID;
   createdAt: string;
   updatedAt: string;
 }
@@ -73,7 +79,6 @@ export interface ProjectUpdateForm {
   location?: string;
   description?: string;
 }
-
 export interface FileObject {
   fileId: ID;
   objectName?: string;
@@ -81,6 +86,9 @@ export interface FileObject {
   bizType?: string;
   bizId?: ID;
   fileName: string;
+  originalName?: string;
+  fileType?: string;
+  size?: number;
   fileExt?: string;
   contentType?: string;
   fileSize: number;
@@ -204,9 +212,12 @@ export interface ReportItem {
   reportName: string;
   reportType: string;
   templateId: ID;
+  engineType?: string;
   version: string;
   status: Status;
   progress: number;
+  previewUrl?: string;
+  errorMessage?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -310,7 +321,9 @@ export interface TaskStageLog {
   taskId: ID;
   attemptNo?: number;
   stageCode: string;
+  stageName?: string;
   status: Status;
+  message?: string;
   inputSummary?: string;
   outputSummary?: string;
   errorMessage?: string;
@@ -327,13 +340,64 @@ export interface TaskDetail {
   bizType?: string;
   bizId?: ID;
   status: Status;
+  progress?: number;
   currentStage?: string;
   retryCount?: number;
   maxRetryCount?: number;
   cancelRequested?: boolean;
   errorMessage?: string;
+  stageLogs?: TaskStageLog[];
   startedAt?: string;
   finishedAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProjectMember {
+  id: ID;
+  projectId: ID;
+  userId: ID;
+  realName: string;
+  roleName: string;
+  permissions: string[];
+  status: Status;
+  createdAt: string;
+}
+
+export interface DataSourceItem {
+  id?: ID;
+  dataSourceId: ID;
+  projectId: ID;
+  name: string;
+  type: 'MYSQL' | 'POSTGRESQL' | 'KINGBASE' | string;
+  host: string;
+  port?: number;
+  databaseName: string;
+  username?: string;
+  status: Status | string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DataSourceQueryResult {
+  sql?: string;
+  columns: string[];
+  rows: Record<string, unknown>[];
+  summary?: string;
+}
+
+export interface AuditLog {
+  id: ID;
+  projectId?: ID;
+  operatorId?: ID;
+  operatorName: string;
+  action: string;
+  module: string;
+  targetType?: string;
+  targetId?: ID;
+  result: 'SUCCESS' | 'FAILED' | string;
+  ip?: string;
+  detail?: string;
+  createdAt: string;
 }

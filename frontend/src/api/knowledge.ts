@@ -1,34 +1,82 @@
-﻿import request from '../utils/request';
+import request from '../utils/request';
 import { mockKnowledgeBases, mockKnowledgeDocuments } from '../mocks/knowledge';
 import type { ID, KnowledgeBase, KnowledgeDocument, PageQuery, PageResult } from './types';
+import { useModuleMock } from './mock';
 
-const useMock = import.meta.env.VITE_USE_MOCK === 'true';
+const useMock = useModuleMock('VITE_USE_KNOWLEDGE_MOCK', false);
+const mockBaseStorageKey = 'smart_worksite_mock_knowledge_bases';
+const mockDocumentStorageKey = 'smart_worksite_mock_knowledge_documents';
+
+function readMockState<T>(key: string, fallback: T[]) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) as T[] : [...fallback];
+  } catch {
+    return [...fallback];
+  }
+}
+
+const mockBaseState = readMockState<KnowledgeBase>(mockBaseStorageKey, mockKnowledgeBases);
+const mockDocumentState = readMockState<KnowledgeDocument>(mockDocumentStorageKey, mockKnowledgeDocuments);
+
+function saveMockState() {
+  localStorage.setItem(mockBaseStorageKey, JSON.stringify(mockBaseState));
+  localStorage.setItem(mockDocumentStorageKey, JSON.stringify(mockDocumentState));
+}
+
+function createMockId() {
+  return Number(`${Date.now()}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`);
+}
 
 export async function fetchKnowledgeBases(projectId: ID) {
-  if (useMock) return mockKnowledgeBases.filter((item) => String(item.projectId) === String(projectId));
+  if (useMock) return mockBaseState.filter((item) => String(item.projectId) === String(projectId));
   const page = await request.get<PageResult<KnowledgeBase>>(`/projects/${projectId}/knowledge-bases`);
   return page.records;
 }
 
 export async function createKnowledgeBase(projectId: ID, data: Pick<KnowledgeBase, 'name' | 'description' | 'domain'>) {
-  if (useMock) return { ...mockKnowledgeBases[0], ...data, knowledgeBaseId: Date.now(), projectId } satisfies KnowledgeBase;
+  if (useMock) {
+    const now = new Date().toISOString();
+    const id = createMockId();
+    const created = { knowledgeBaseId: id, projectId, domain: data.domain, name: data.name, description: data.description || '', status: 'ACTIVE', createdAt: now, updatedAt: now } satisfies KnowledgeBase;
+    mockBaseState.unshift(created);
+    saveMockState();
+    return created;
+  }
   return request.post<KnowledgeBase>(`/projects/${projectId}/knowledge-bases`, data);
 }
 
 export async function uploadKnowledgeDocument(knowledgeBaseId: ID, file: File) {
-  if (useMock) return { ...mockKnowledgeDocuments[0], documentId: Date.now(), knowledgeBaseId, title: file.name } satisfies KnowledgeDocument;
+  if (useMock) {
+    const now = new Date().toISOString();
+    const base = mockBaseState.find((item) => String(item.knowledgeBaseId) === String(knowledgeBaseId));
+    const id = createMockId();
+    const created = { documentId: id, projectId: base?.projectId || 0, knowledgeBaseId, fileId: id + 1, title: file.name, sourceType: 'UPLOAD', indexStatus: 'PENDING', taskId: id + 2, createdAt: now, updatedAt: now } satisfies KnowledgeDocument;
+    mockDocumentState.unshift(created);
+    saveMockState();
+    return created;
+  }
   const form = new FormData();
   form.append('file', file);
   return request.post<KnowledgeDocument>(`/knowledge-bases/${knowledgeBaseId}/documents`, form);
 }
 
 export async function triggerDocumentIndex(documentId: ID) {
-  if (useMock) return { ...mockKnowledgeDocuments[0], documentId, indexStatus: 'QUEUED' } satisfies KnowledgeDocument;
+  if (useMock) {
+    const item = mockDocumentState.find((doc) => String(doc.documentId) === String(documentId));
+    if (item) {
+      item.indexStatus = 'QUEUED';
+      item.updatedAt = new Date().toISOString();
+      saveMockState();
+      return item;
+    }
+    return { ...mockKnowledgeDocuments[0], documentId, indexStatus: 'QUEUED' } satisfies KnowledgeDocument;
+  }
   return request.post<KnowledgeDocument>(`/knowledge-documents/${documentId}/index`);
 }
 
 export async function fetchKnowledgeDocuments(knowledgeBaseId: ID, params: PageQuery = {}) {
-  const records = mockKnowledgeDocuments.filter((item) => String(item.knowledgeBaseId) === String(knowledgeBaseId));
+  const records = mockDocumentState.filter((item) => String(item.knowledgeBaseId) === String(knowledgeBaseId));
   if (useMock) return { pageNo: params.pageNo || 1, pageSize: params.pageSize || 20, total: records.length, records } satisfies PageResult<KnowledgeDocument>;
   return request.get<PageResult<KnowledgeDocument>>(`/knowledge-bases/${knowledgeBaseId}/documents`, { params });
 }

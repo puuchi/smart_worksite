@@ -1,43 +1,74 @@
-﻿import request from '../utils/request';
-import { mockQaMessages, mockQaSessions } from '../mocks/qa';
+import request from '../utils/request';
+import { mockQaMessages, mockQaSessions, type QaMessageWithExtra } from '../mocks/qa';
 import type { ID, PageResult, QaMessage, QaSession } from './types';
+import { useModuleMock } from './mock';
 
-const useMock = import.meta.env.VITE_USE_MOCK === 'true';
+const useMock = useModuleMock('VITE_USE_QA_MOCK', false);
+const mockSessions = [...mockQaSessions];
+const mockMessages: QaMessageWithExtra[] = [...mockQaMessages];
+const feedbackState: Record<string, boolean> = {};
+
+function mockId() {
+  return Number(`${Date.now()}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`);
+}
+
+function buildAssistantMessage(sessionId: ID, projectId: ID, question: string): QaMessageWithExtra {
+  const now = new Date().toISOString();
+  const id = mockId();
+  return {
+    messageId: id,
+    sessionId,
+    projectId,
+    question,
+    answer: `???????????${question}??????????????????????????`,
+    routeMode: 'MIXED',
+    status: 'SUCCESS',
+    createdAt: now,
+    updatedAt: now,
+    references: [
+      { title: '???????', sourceType: 'KNOWLEDGE', page: '?5?', score: 0.91, documentId: 3001 },
+      { title: '???????', sourceType: 'KNOWLEDGE', page: '?2?', score: 0.84, documentId: 3002 }
+    ],
+    sqlResult: { sql: 'select risk_level,count(*) as total from check_items group by risk_level', table: 'check_items', rows: [{ risk_level: 'HIGH', total: 2 }, { risk_level: 'MEDIUM', total: 5 }] }
+  };
+}
 
 export async function createQaSession(data: { projectId: ID; title?: string }) {
-  if (useMock) return { ...mockQaSessions[0], ...data, sessionId: Date.now() } satisfies QaSession;
+  if (useMock) {
+    const now = new Date().toISOString();
+    const id = mockId();
+    const created = { sessionId: id, projectId: data.projectId, title: data.title || '????', status: 'ACTIVE', createdAt: now, updatedAt: now } satisfies QaSession;
+    mockSessions.unshift(created);
+    return created;
+  }
   return request.post<QaSession>('/qa/sessions', data);
 }
 
 export async function fetchQaSessions(projectId: ID) {
-  if (useMock) return mockQaSessions.filter((item) => String(item.projectId) === String(projectId));
+  if (useMock) return mockSessions.filter((item) => String(item.projectId) === String(projectId));
   const page = await request.get<PageResult<QaSession>>('/qa/sessions', { params: { projectId } });
   return page.records;
 }
 
 export async function fetchQaMessages(sessionId: ID) {
-  if (useMock) return mockQaMessages.filter((item) => String(item.sessionId) === String(sessionId));
+  if (useMock) return mockMessages.filter((item) => String(item.sessionId) === String(sessionId));
   return request.get<QaMessage[]>(`/qa/sessions/${sessionId}/messages`);
 }
 
 export async function sendQuestion(sessionId: ID, data: { projectId: ID; question: string; routeMode?: string; dataSourceIds?: ID[]; knowledgeBaseIds?: ID[] }) {
   if (useMock) {
-    const now = new Date().toISOString();
-    return {
-      messageId: Date.now(), sessionId, projectId: data.projectId, question: data.question,
-      answer: '临边防护应设置防护栏杆、挡脚板和安全网，洞口需采用盖板或围栏并设置警示标识。',
-      routeMode: 'MIXED', status: 'SUCCESS', createdAt: now, updatedAt: now,
-      references: [
-        { title: 'JGJ 80-2016 高处作业安全技术规范', sourceType: 'KNOWLEDGE', page: '第12页', score: 0.92, documentId: 3001 },
-        { title: '项目安全检查制度', sourceType: 'KNOWLEDGE', page: '第4章', score: 0.86, documentId: 3002 }
-      ]
-    } satisfies QaMessage;
+    const answer = buildAssistantMessage(sessionId, data.projectId, data.question);
+    mockMessages.push(answer);
+    return answer;
   }
   return request.post<QaMessage>(`/qa/sessions/${sessionId}/messages`, data);
 }
 
 export async function submitFeedback(messageId: ID, useful: boolean) {
-  if (useMock) return { messageId, useful };
+  if (useMock) {
+    feedbackState[String(messageId)] = useful;
+    return { messageId, useful };
+  }
   return request.post(`/qa/messages/${messageId}/feedback`, {
     feedbackType: useful ? 'LIKE' : 'DISLIKE',
     extra: { useful }
