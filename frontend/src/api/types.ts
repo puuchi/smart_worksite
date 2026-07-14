@@ -441,6 +441,55 @@ export interface DataSourceQueryResult {
   summary?: string;
 }
 
+export interface PolicySource {
+  sourceId: ID;
+  projectId: ID;
+  name: string;
+  url: string;
+  crawlFrequency: 'MANUAL' | 'DAILY' | 'WEEKLY' | string;
+  status: Status | string;
+  description?: string;
+  lastCrawledAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PolicySourceForm {
+  name: string;
+  url: string;
+  crawlFrequency: string;
+  description?: string;
+}
+
+export interface PolicyCrawlTask {
+  taskId: ID;
+  projectId: ID;
+  sourceId?: ID;
+  sourceName?: string;
+  status: Status | string;
+  progress?: number;
+  fetchedCount: number;
+  indexedCount: number;
+  message?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  createdAt: string;
+}
+
+export interface PolicyArticle {
+  articleId: ID;
+  projectId: ID;
+  sourceId: ID;
+  title: string;
+  url: string;
+  summary: string;
+  publishDate?: string;
+  category?: string;
+  indexStatus: Status | string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AuditLog {
   id: ID;
   projectId?: ID;
