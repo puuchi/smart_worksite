@@ -201,13 +201,14 @@ onMounted(async () => {
     <el-card class="work-card">
       <template #header><strong>数据库问答</strong></template>
       <el-alert title="数据库问答由后端调用 Python 生成 SQL，Java 后端只执行安全只读 SQL；失败会直接显示真实错误。" type="info" show-icon :closable="false" style="margin-bottom: 12px" />
+      <div class="field-title required-label">业务数据问题</div>
       <el-input v-model="question" type="textarea" :rows="3" placeholder="请输入业务数据问题" />
       <el-button type="primary" :loading="querying" style="margin-top:12px" @click="ask">生成查询</el-button>
       <div v-if="result" class="result"><el-alert v-if="result.summary" :title="result.summary" type="success" show-icon /><pre v-if="result.sql">{{ result.sql }}</pre><JsonViewer :value="result.rows" /></div>
     </el-card>
 
     <el-dialog v-model="dialogVisible" title="数据源配置" width="640px">
-      <el-form label-width="96px"><el-form-item label="名称"><el-input v-model="form.name" /></el-form-item><el-form-item label="类型"><el-select v-model="form.dbType"><el-option label="MySQL" value="MYSQL" /><el-option label="PostgreSQL" value="POSTGRESQL" /><el-option label="Kingbase" value="KINGBASE" /></el-select></el-form-item><el-form-item label="JDBC URL"><el-input v-model="form.jdbcUrl" placeholder="jdbc:mysql://db.example.invalid:3306/db" /></el-form-item><el-form-item label="用户名"><el-input v-model="form.username" /></el-form-item><el-form-item label="密码"><el-input v-model="form.password" type="password" show-password :placeholder="form.dataSourceId ? '留空则不修改密码' : '请输入密码'" /></el-form-item></el-form>
+      <el-form label-width="96px"><el-form-item label="名称" required><el-input v-model="form.name" /></el-form-item><el-form-item label="类型" required><el-select v-model="form.dbType"><el-option label="MySQL" value="MYSQL" /><el-option label="PostgreSQL" value="POSTGRESQL" /><el-option label="Kingbase" value="KINGBASE" /></el-select></el-form-item><el-form-item label="JDBC URL" required><el-input v-model="form.jdbcUrl" placeholder="jdbc:mysql://db.example.invalid:3306/db" /></el-form-item><el-form-item label="用户名" required><el-input v-model="form.username" /></el-form-item><el-form-item label="密码" :required="!form.dataSourceId"><el-input v-model="form.password" type="password" show-password :placeholder="form.dataSourceId ? '留空则不修改密码' : '请输入密码'" /></el-form-item></el-form>
       <template #footer><el-button @click="dialogVisible=false">取消</el-button><el-button type="primary" :loading="saving" @click="save">保存</el-button></template>
     </el-dialog>
 
@@ -217,4 +218,4 @@ onMounted(async () => {
   </div>
 </template>
 
-<style scoped>.table-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.table-head>div{display:flex;gap:8px}.result{margin-top:14px;display:flex;flex-direction:column;gap:12px}pre{background:#0f172a;color:#d1fae5;padding:12px;border-radius:10px;overflow:auto}</style>
+<style scoped>.table-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.table-head>div{display:flex;gap:8px}.field-title{margin:0 0 8px;font-weight:700}.result{margin-top:14px;display:flex;flex-direction:column;gap:12px}pre{background:#0f172a;color:#d1fae5;padding:12px;border-radius:10px;overflow:auto}</style>

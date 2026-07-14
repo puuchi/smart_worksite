@@ -259,7 +259,7 @@ const formRules = {
         <el-form-item label="描述">
           <el-input v-model="form.description" type="textarea" :rows="3" />
         </el-form-item>
-        <el-form-item label="权限">
+        <el-form-item label="权限" required>
           <el-checkbox-group v-model="dialogPermissionIds" class="dialog-perm-checks">
             <el-checkbox v-for="p in permissions" :key="p.id" :value="p.id" :label="p.id">
               {{ p.permissionName }}<span class="perm-code">{{ p.permissionCode }}</span>

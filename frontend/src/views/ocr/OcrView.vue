@@ -309,12 +309,12 @@ onMounted(async () => {
       <el-card class="work-card">
         <h3 class="panel-title">文件上传与识别设置</h3>
         <el-form label-width="88px">
-          <el-form-item label="OCR 类型">
+          <el-form-item label="OCR 类型" required>
             <el-select v-model="ocrType" style="width: 100%">
               <el-option v-for="item in ocrTypes" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
           </el-form-item>
-          <el-form-item v-if="ocrType === 'CUSTOM'" label="自定义字段">
+          <el-form-item v-if="ocrType === 'CUSTOM'" label="自定义字段" required>
             <el-input
               v-model="customFields"
               type="textarea"
@@ -322,12 +322,13 @@ onMounted(async () => {
               placeholder="请输入后端要求的 JSON 数组，例如合同编号、甲方、金额等字段定义"
             />
           </el-form-item>
-          <el-form-item v-if="ocrType === 'INVOICE'" label="发票类型">
+          <el-form-item v-if="ocrType === 'INVOICE'" label="发票类型" required>
             <el-select v-model="invoiceType" style="width: 100%">
               <el-option v-for="item in invoiceTypes" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
           </el-form-item>
         </el-form>
+        <div class="upload-title required-label">识别文件</div>
         <AppUpload
           :model-value="file ? [file] : []"
           accept=".jpg,.jpeg,.png,.pdf"
@@ -369,6 +370,7 @@ onMounted(async () => {
 <style scoped>
 .table-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .table-head > div { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.upload-title { margin: 4px 0 10px; font-weight: 700; }
 .preview { height: 180px; margin-top: 14px; border: 1px dashed var(--sw-border); border-radius: 12px; display: grid; place-items: center; color: var(--sw-muted); background: #f8fafc; }
 @media (max-width: 768px) {
   .table-head { align-items: flex-start; flex-direction: column; }

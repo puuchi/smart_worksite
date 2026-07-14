@@ -2,7 +2,7 @@
 import { computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessageBox } from 'element-plus';
-import { ChatLineRound, Coin, DocumentChecked, Files, FolderOpened, House, Notebook, Operation, Picture, Setting, SwitchButton, Tickets, User, UserFilled } from '@element-plus/icons-vue';
+import { ChatLineRound, Coin, DocumentChecked, Files, FolderOpened, House, Notebook, Operation, Picture, Reading, Setting, SwitchButton, Tickets, User } from '@element-plus/icons-vue';
 import { useProjectStore } from '../stores/project';
 import { useUserStore } from '../stores/user';
 
@@ -11,25 +11,56 @@ const router = useRouter();
 const projectStore = useProjectStore();
 const userStore = useUserStore();
 
-const menus = [
-  { path: '/dashboard', title: '工作台', icon: House, permission: 'dashboard:view' },
-  { path: '/projects', title: '项目管理', icon: FolderOpened, permission: 'project:view' },
-  { path: '/files', title: '文件管理', icon: Files, permission: 'file:view' },
-  { path: '/templates', title: '模板中心', icon: Tickets, permission: 'template:view' },
-  { path: '/knowledge', title: '知识库', icon: Notebook, permission: 'knowledge:view' },
-  { path: '/qa', title: '智能问答', icon: ChatLineRound, permission: 'qa:view' },
-  { path: '/review', title: '合规审查', icon: DocumentChecked, permission: 'review:view' },
-  { path: '/report', title: '报告管理', icon: Files, permission: 'report:view' },
-  { path: '/ocr', title: 'OCR识别', icon: Picture, permission: 'ocr:view' },
-  { path: '/datasources', title: '数据源管理', icon: Coin },
-  { path: '/tasks', title: '任务中心', icon: Operation },
-  { path: '/audit', title: '审计日志', icon: Setting },
-  { path: '/project/members', title: '项目成员', icon: UserFilled, permission: 'project:member:manage' },
-  { path: '/system/users', title: '用户管理', icon: User, permission: 'system:user:manage' },
-  { path: '/system/roles', title: '角色管理', icon: Setting, permission: 'system:user:manage' }
+const menuGroups = [
+  {
+    key: 'home',
+    title: '工作入口',
+    children: [
+      { path: '/dashboard', title: '工作台', icon: House, permission: 'dashboard:view' }
+    ]
+  },
+  {
+    key: 'ai',
+    title: '智能应用',
+    children: [
+      { path: '/qa', title: '智能问答', icon: ChatLineRound, permission: 'qa:view' },
+      { path: '/review', title: '合规审查', icon: DocumentChecked, permission: 'review:view' },
+      { path: '/report', title: '报告生成', icon: Files, permission: 'report:view' },
+      { path: '/ocr', title: 'OCR识别', icon: Picture, permission: 'ocr:view' }
+    ]
+  },
+  {
+    key: 'assets',
+    title: '知识资产',
+    children: [
+      { path: '/knowledge', title: '项目知识库', icon: Notebook, permission: 'knowledge:view' },
+      { path: '/policy', title: '政策资讯', icon: Reading, permission: 'knowledge:view' },
+      { path: '/datasources', title: '数据源管理', icon: Coin }
+    ]
+  },
+  {
+    key: 'operations',
+    title: '运营中心',
+    children: [
+      { path: '/tasks', title: '任务中心', icon: Operation },
+      { path: '/audit', title: '审计日志', icon: Setting }
+    ]
+  },
+  {
+    key: 'config',
+    title: '基础配置',
+    children: [
+      { path: '/projects', title: '项目管理', icon: FolderOpened, permission: 'project:view' },
+      { path: '/templates', title: '模板管理', icon: Tickets, permission: 'template:view' },
+      { path: '/system/users', title: '用户管理', icon: User, permission: 'system:user:manage' },
+      { path: '/system/roles', title: '角色管理', icon: Setting, permission: 'system:user:manage' }
+    ]
+  }
 ];
 
-const visibleMenus = computed(() => menus.filter((item) => userStore.hasPermission(item.permission)));
+const visibleMenuGroups = computed(() => menuGroups
+  .map((group) => ({ ...group, children: group.children.filter((item) => userStore.hasPermission(item.permission)) }))
+  .filter((group) => group.children.length));
 const activeMenu = computed(() => route.path.startsWith('/report') ? '/report' : route.path);
 const currentProject = computed(() => projectStore.currentProject);
 
@@ -52,11 +83,22 @@ async function logout() {
         <div class="brand-mark">AI</div>
         <div><strong>智慧工地</strong><span>大模型应用系统</span></div>
       </div>
-      <el-menu :default-active="activeMenu" router class="side-menu">
-        <el-menu-item v-for="item in visibleMenus" :key="item.path" :index="item.path">
-          <el-icon><component :is="item.icon" /></el-icon>
-          <span>{{ item.title }}</span>
-        </el-menu-item>
+      <el-menu :default-active="activeMenu" router class="side-menu" :default-openeds="['ai', 'assets']">
+        <template v-for="group in visibleMenuGroups" :key="group.key">
+          <el-menu-item v-if="group.children.length === 1" :index="group.children[0].path">
+            <el-icon><component :is="group.children[0].icon" /></el-icon>
+            <span>{{ group.children[0].title }}</span>
+          </el-menu-item>
+          <el-sub-menu v-else :index="group.key">
+            <template #title>
+              <span class="menu-group-title">{{ group.title }}</span>
+            </template>
+            <el-menu-item v-for="item in group.children" :key="item.path" :index="item.path">
+              <el-icon><component :is="item.icon" /></el-icon>
+              <span>{{ item.title }}</span>
+            </el-menu-item>
+          </el-sub-menu>
+        </template>
       </el-menu>
     </el-aside>
     <el-container>
@@ -66,6 +108,7 @@ async function logout() {
           <div class="project-meta">{{ currentProject?.code || currentProject?.projectCode || '-' }} / {{ currentProject?.address || currentProject?.location || '-' }}</div>
         </div>
         <div class="top-actions">
+          <el-button type="primary" plain @click="router.push('/qa')">去提问</el-button>
           <el-select v-model="projectStore.currentProjectId" style="width: 240px" :loading="projectStore.loading" @change="projectStore.switchProject">
             <el-option v-for="project in projectStore.projects" :key="project.projectId" :label="project.name || project.projectName" :value="String(project.projectId)" :disabled="!['ACTIVE', 'ENABLED'].includes(project.status)" />
           </el-select>
@@ -91,8 +134,14 @@ async function logout() {
 .brand-mark { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; background: linear-gradient(135deg, #1e5eff, #0f766e); font-weight: 800; }
 .brand span { display: block; margin-top: 3px; font-size: 12px; color: rgba(255,255,255,0.72); }
 .side-menu { border-right: 0; background: transparent; }
-.side-menu :deep(.el-menu-item) { color: rgba(255,255,255,0.82); margin: 6px 10px; border-radius: 10px; }
+.side-menu :deep(.el-menu-item),
+.side-menu :deep(.el-sub-menu__title) { color: rgba(255,255,255,0.82); margin: 6px 10px; border-radius: 10px; }
+.side-menu :deep(.el-sub-menu__title:hover),
+.side-menu :deep(.el-menu-item:hover) { background: rgba(255,255,255,0.1); color: #fff; }
 .side-menu :deep(.el-menu-item.is-active) { background: rgba(255,255,255,0.14); color: #fff; }
+.side-menu :deep(.el-sub-menu .el-menu-item) { min-width: 0; margin-left: 18px; }
+.side-menu :deep(.el-menu) { background: transparent; }
+.menu-group-title { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; color: rgba(255,255,255,0.68); }
 .topbar { display: flex; align-items: center; justify-content: space-between; background: #fff; border-bottom: 1px solid var(--sw-border); }
 .current-project { font-weight: 700; }
 .project-meta { margin-top: 4px; color: var(--sw-muted); font-size: 12px; }

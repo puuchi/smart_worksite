@@ -207,7 +207,7 @@ const roleMap: Record<string, string> = {
         <el-form-item label="邮箱">
           <el-input v-model="form.email" />
         </el-form-item>
-        <el-form-item label="角色">
+        <el-form-item label="角色" required>
           <el-select v-model="form.roleCodes" multiple :loading="roleLoading" style="width:100%">
             <el-option v-for="r in roles" :key="r.roleCode" :label="roleMap[r.roleCode] || r.roleName" :value="r.roleCode" />
           </el-select>
@@ -223,7 +223,7 @@ const roleMap: Record<string, string> = {
     <!-- 重置密码对话框 -->
     <el-dialog v-model="resetPwdVisible" title="重置密码" width="380px">
       <el-form label-width="100px">
-        <el-form-item label="新密码">
+        <el-form-item label="新密码" required>
           <el-input v-model="newPassword" type="password" show-password placeholder="至少6位" />
         </el-form-item>
       </el-form>

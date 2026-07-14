@@ -28,11 +28,12 @@ const reports = ref<ReportItem[]>([]);
 const templates = ref<ReportTemplate[]>([]);
 const referenceFiles = ref<FileObject[]>([]);
 const downloadingId = ref<ID>('');
-const form = reactive<{ reportName: string; reportType: string; templateId: ID | ''; referenceFileIds: ID[] }>({
+const form = reactive<{ reportName: string; reportType: string; templateId: ID | ''; referenceFileIds: ID[]; dataSources: string[] }>({
   reportName: '',
   reportType: 'SAFETY_MONTHLY',
   templateId: '',
-  referenceFileIds: []
+  referenceFileIds: [],
+  dataSources: ['MODEL', 'KNOWLEDGE', 'DATABASE', 'FILE']
 });
 
 const currentProjectId = computed(() => projectStore.currentProject?.projectId);
@@ -183,11 +184,12 @@ onMounted(loadData);
     </div>
 
     <AppSearchForm
-      v-model="search"
+      :model-value="search"
       :fields="[
         { prop: 'keyword', label: '关键词' },
         { prop: 'status', label: '状态', type: 'select', options: statusOptions }
       ]"
+      @update:model-value="(value) => Object.assign(search, value)"
       @search="loadData"
       @reset="reset"
     />
@@ -239,20 +241,29 @@ onMounted(loadData);
       </el-alert>
 
       <el-form label-width="96px">
-        <el-form-item label="报告名称"><el-input v-model="form.reportName" placeholder="请输入报告名称" /></el-form-item>
-        <el-form-item label="报告类型">
+        <el-form-item label="报告名称" required><el-input v-model="form.reportName" placeholder="请输入报告名称" /></el-form-item>
+        <el-form-item label="报告类型" required>
           <el-select v-model="form.reportType" style="width: 100%">
             <el-option label="安全月报" value="SAFETY_MONTHLY" />
             <el-option label="质量周报" value="QUALITY_WEEKLY" />
             <el-option label="综合报告" value="GENERAL" />
           </el-select>
         </el-form-item>
-        <el-form-item label="报告模板">
+        <el-form-item label="报告模板" required>
           <el-select v-model="form.templateId" style="width: 100%" placeholder="请选择报告模板" clearable>
             <el-option v-for="item in templates" :key="item.templateId" :label="item.templateName" :value="item.templateId" />
           </el-select>
         </el-form-item>
-        <el-form-item label="参考文件">
+        <el-form-item label="数据来源" required>
+          <el-checkbox-group v-model="form.dataSources">
+            <el-checkbox label="MODEL">模型生成</el-checkbox>
+            <el-checkbox label="KNOWLEDGE">知识库</el-checkbox>
+            <el-checkbox label="DATABASE">数据库</el-checkbox>
+            <el-checkbox label="FILE">参考文件</el-checkbox>
+          </el-checkbox-group>
+          <div class="form-tip">当前后端创建报告接口保持原有字段，知识库/数据库/模型来源由后端报告任务与 CryptoAgent 链路扩展；本页先展示验收配置入口，不直接调用 Python 或数据库。</div>
+        </el-form-item>
+        <el-form-item label="参考文件" required>
           <el-select v-model="form.referenceFileIds" multiple style="width: 100%" placeholder="请选择文本参考文件" clearable>
             <el-option v-for="item in referenceFiles" :key="item.fileId" :label="displayReferenceFile(item)" :value="item.fileId" />
           </el-select>
@@ -265,3 +276,5 @@ onMounted(loadData);
     </el-dialog>
   </div>
 </template>
+
+<style scoped>.form-tip { margin-top: 6px; color: var(--sw-muted); font-size: 12px; line-height: 1.6; }</style>

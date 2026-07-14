@@ -24,7 +24,7 @@ const sessions = ref<QaSession[]>([]);
 const activeSessionId = ref<ID>('');
 const messages = ref<QaMessageExtra[]>([]);
 const feedbackMap = ref<Record<string, boolean>>({});
-const routeMode = ref<'MODEL' | 'KNOWLEDGE' | 'DATABASE' | 'MIXED'>('MODEL');
+const routeMode = ref<'AUTO' | 'MODEL' | 'KNOWLEDGE' | 'DATABASE' | 'MIXED'>('AUTO');
 const knowledgeBases = ref<KnowledgeBase[]>([]);
 const dataSources = ref<DataSourceItem[]>([]);
 const selectedKnowledgeBaseIds = ref<ID[]>([]);
@@ -154,8 +154,8 @@ async function ask() {
     const payload = {
       question: content,
       routeMode: routeMode.value,
-      knowledgeBaseIds: ['KNOWLEDGE', 'MIXED'].includes(routeMode.value) ? selectedKnowledgeBaseIds.value : [],
-      dataSourceIds: ['DATABASE', 'MIXED'].includes(routeMode.value) && selectedDataSourceId.value ? [selectedDataSourceId.value] : []
+      knowledgeBaseIds: ['AUTO', 'KNOWLEDGE', 'MIXED'].includes(routeMode.value) ? selectedKnowledgeBaseIds.value : [],
+      dataSourceIds: ['AUTO', 'DATABASE', 'MIXED'].includes(routeMode.value) && selectedDataSourceId.value ? [selectedDataSourceId.value] : []
     };
     const answer = await sendQuestion(sessionId, payload, projectId) as QaMessageExtra;
     messages.value.push(answer);
@@ -187,7 +187,7 @@ onMounted(() => loadSessions());
     <div class="page-header">
       <div>
         <h2 class="page-title">{{ t('知识问答') }}</h2>
-        <p class="page-desc">{{ t('支持连续提问、来源引用和答案反馈。') }}</p>
+        <p class="page-desc">{{ t('支持自动路由、知识库/数据库来源引用、上下文追问和答案反馈。') }}</p>
       </div>
       <el-button v-if="canManageQa" type="primary" :loading="sessionLoading" @click="newSession">{{ t('新建会话') }}</el-button>
     </div>
@@ -210,16 +210,18 @@ onMounted(() => loadSessions());
         <el-alert v-if="messageError" :title="messageError" type="error" show-icon :closable="false" style="margin-bottom: 12px" />
         <el-alert v-if="resourceError" :title="resourceError" type="warning" show-icon :closable="false" style="margin-bottom: 12px" />
         <div class="qa-options" v-loading="resourceLoading">
+          <span class="option-label required-label">{{ t('回答方式') }}</span>
           <el-select v-model="routeMode" style="width: 160px">
+            <el-option label="自动路由" value="AUTO" />
             <el-option label="模型问答" value="MODEL" />
             <el-option label="知识库问答" value="KNOWLEDGE" />
             <el-option label="数据库问答" value="DATABASE" />
             <el-option label="混合问答" value="MIXED" />
           </el-select>
-          <el-select v-if="['KNOWLEDGE', 'MIXED'].includes(routeMode)" v-model="selectedKnowledgeBaseIds" multiple collapse-tags collapse-tags-tooltip style="min-width: 240px" placeholder="选择已启用知识库">
+          <el-select v-if="['AUTO', 'KNOWLEDGE', 'MIXED'].includes(routeMode)" v-model="selectedKnowledgeBaseIds" multiple collapse-tags collapse-tags-tooltip style="min-width: 240px" placeholder="选择已启用知识库">
             <el-option v-for="item in enabledKnowledgeBases" :key="item.knowledgeBaseId" :label="item.name" :value="item.knowledgeBaseId" />
           </el-select>
-          <el-select v-if="['DATABASE', 'MIXED'].includes(routeMode)" v-model="selectedDataSourceId" clearable style="min-width: 220px" placeholder="选择一个已启用数据源">
+          <el-select v-if="['AUTO', 'DATABASE', 'MIXED'].includes(routeMode)" v-model="selectedDataSourceId" clearable style="min-width: 220px" placeholder="选择一个已启用数据源">
             <el-option v-for="item in enabledDataSources" :key="item.dataSourceId" :label="item.name" :value="item.dataSourceId" />
           </el-select>
         </div>
@@ -229,6 +231,8 @@ onMounted(() => loadSessions());
           <el-tag v-if="hasSuspiciousText(msg.content || msg.answer)" type="warning" size="small" style="margin-left: 6px">疑似历史乱码数据</el-tag>
           <p>{{ msg.content || msg.answer }}</p>
           <template v-if="msg.role === 'assistant'">
+            <div class="answer-meta"><el-tag size="small">路由：{{ msg.routeMode || routeMode }}</el-tag><el-tag v-if="msg.providerTraceId" size="small" type="info">Trace: {{ msg.providerTraceId }}</el-tag></div>
+            <div v-if="msg.needClarification || msg.clarificationQuestions?.length" class="clarify-block"><strong>{{ t('需要补充的信息') }}</strong><ul><li v-for="item in msg.clarificationQuestions" :key="item">{{ item }}</li></ul></div>
             <div class="reference-block">
               <strong>{{ t('来源引用') }}</strong>
               <EmptyState v-if="!msg.references?.length" :description="t('暂无来源引用。')" />
@@ -246,6 +250,7 @@ onMounted(() => loadSessions());
             </div>
           </template>
         </div>
+        <div class="input-label required-label">{{ t('问题内容') }}</div>
         <el-input v-model="question" type="textarea" :rows="3" :placeholder="canManageQa ? t('\u8bf7\u8f93\u5165\u95ee\u9898') : qaManageTip" :disabled="!canManageQa" @keyup.ctrl.enter="ask" />
         <el-button v-if="canManageQa" type="primary" style="margin-top: 10px" :loading="sending" :disabled="sending" @click="ask">{{ t('发送') }}</el-button>
       </el-card>
@@ -263,9 +268,14 @@ onMounted(() => loadSessions());
 .chat.user { background: #f8fafc; }
 .chat.assistant { background: #fff; }
 .chat p { margin: 6px 0; }
+.answer-meta { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.clarify-block { margin-top: 10px; padding: 10px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; }
+.clarify-block ul { margin: 6px 0 0; padding-left: 18px; }
 .reference-block { margin-top: 10px; padding: 10px; background: #f8fafc; border-radius: 10px; }
 .source { padding: 8px 0; border-bottom: 1px solid var(--sw-border); }
 .feedback { margin-top: 8px; display: flex; gap: 8px; align-items: center; color: var(--sw-muted); }
 .qa-options { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.option-label { display: inline-flex; align-items: center; height: 32px; color: var(--sw-muted); font-size: 13px; }
+.input-label { margin: 10px 0 8px; font-weight: 700; }
 @media (max-width: 960px) { .three-col { grid-template-columns: 1fr; } }
 </style>

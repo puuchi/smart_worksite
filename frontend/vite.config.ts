@@ -4,17 +4,19 @@ import AutoImport from 'unplugin-auto-import/vite';
 import Components from 'unplugin-vue-components/vite';
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers';
 
+const elementPlusResolver = ElementPlusResolver({ importStyle: false });
+
 export default defineConfig({
   plugins: [
     vue(),
     AutoImport({
       dts: false,
-      resolvers: [ElementPlusResolver()]
+      resolvers: [elementPlusResolver]
     }),
     Components({
       dirs: [],
       dts: false,
-      resolvers: [ElementPlusResolver()]
+      resolvers: [elementPlusResolver]
     })
   ],
   build: {

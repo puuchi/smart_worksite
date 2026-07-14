@@ -176,13 +176,13 @@ async function remove(row: ProjectMemberItem) {
 
     <el-dialog v-model="dialogVisible" :title="editingUserId == null ? '添加成员' : '修改角色'" width="400px" destroy-on-close>
       <el-form label-width="90px">
-        <el-form-item v-if="editingUserId == null" label="选择用户">
+        <el-form-item v-if="editingUserId == null" label="选择用户" required>
           <el-select v-model="form.userId" filterable :loading="userLoading" style="width: 100%" placeholder="请选择用户">
             <el-option v-for="user in availableUsers" :key="user.id" :label="`${user.displayName} (${user.username})`" :value="user.id" />
           </el-select>
           <div v-if="userError" class="form-error">{{ userError }}</div>
         </el-form-item>
-        <el-form-item label="项目角色">
+        <el-form-item label="项目角色" required>
           <el-select v-model="form.projectRole" style="width: 100%">
             <el-option v-for="role in PROJECT_ROLES" :key="role.value" :label="role.label" :value="role.value" />
           </el-select>
