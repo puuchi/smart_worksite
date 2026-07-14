@@ -29,8 +29,8 @@ async function submit() {
       <h1>智慧工地大模型应用系统</h1>
       <p>项目知识库 · 智能问答 · 合规审查 · 报告生成 · OCR识别</p>
       <el-form :model="form" label-position="top" @keyup.enter="submit">
-        <el-form-item label="账号"><el-input v-model="form.username" size="large" /></el-form-item>
-        <el-form-item label="密码"><el-input v-model="form.password" type="password" show-password size="large" /></el-form-item>
+        <el-form-item label="账号" required><el-input v-model="form.username" size="large" /></el-form-item>
+        <el-form-item label="密码" required><el-input v-model="form.password" type="password" show-password size="large" /></el-form-item>
         <el-button type="primary" size="large" :loading="loading" style="width:100%" @click="submit">登录</el-button>
       </el-form>
       <div class="hint">默认账号：admin / admin123</div>

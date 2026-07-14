@@ -24,6 +24,7 @@ a { color: inherit; text-decoration: none; }
 .muted { color: var(--sw-muted); }
 .metric { font-size: 28px; font-weight: 800; color: var(--sw-primary); }
 .panel-title { margin: 0 0 12px; font-size: 16px; font-weight: 700; }
+.required-label::before { content: "*"; margin-right: 4px; color: var(--sw-red); font-weight: 800; }
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .three-col { display: grid; grid-template-columns: 260px 1fr 320px; gap: 16px; }
 

@@ -234,6 +234,7 @@ onMounted(async () => {
       <el-radio-group v-model="query.bizType" style="margin-bottom:12px" @change="onBizTypeChange">
         <el-radio-button v-for="item in bizTypeOptions" :key="item.value" :label="item.value">{{ item.label }}</el-radio-button>
       </el-radio-group>
+      <div class="upload-title required-label">上传文件</div>
       <AppUpload v-model="uploadFiles" accept=".doc,.docx,.pdf,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.txt,.md" :uploading="uploading" />
       <el-button type="primary" :loading="uploading" style="margin-top:12px" @click="submitUpload">开始上传</el-button>
     </el-card>
@@ -263,5 +264,6 @@ onMounted(async () => {
 
 <style scoped>
 .table-head { display:flex; justify-content:space-between; align-items:center; }
+.upload-title { margin: 0 0 10px; font-weight: 700; }
 .content-box { white-space:pre-wrap; max-height:60vh; overflow:auto; background:#f8fafc; padding:14px; border-radius:10px; }
 </style>

@@ -27,6 +27,11 @@ const reportTypeOptions = ['SAFETY_MONTHLY', 'QUALITY_WEEKLY', 'GENERAL'];
 const reviewTypeOptions = ['SAFETY_REVIEW', 'QUALITY_REVIEW', 'CONTRACT_REVIEW'];
 const templateTypeOptions = computed(() => form.templateCategory === 'REPORT' ? reportTypeOptions : reviewTypeOptions);
 
+const templateAccept = computed(() => form.templateCategory === 'REVIEW' ? '.doc,.docx,.pdf,.xls,.xlsx,.csv,.txt,.md' : '.docx,.txt,.md');
+const templateTip = computed(() => form.templateCategory === 'REVIEW'
+  ? '审查模板按功能清单允许 Word、PDF、Excel/CSV；若后端无法解析会返回明确错误'
+  : '报告变量解析当前支持 DOCX、TXT、MD；其他格式需后端模板变量解析扩展');
+
 async function loadRows() {
   if (!projectId.value) {
     rows.value = [];
@@ -179,17 +184,17 @@ onMounted(async () => { if (!projectStore.currentProject) await projectStore.fet
     </el-card>
     <el-dialog v-model="dialogVisible" title="模板信息" width="620px">
       <el-form label-width="96px">
-        <el-form-item label="模板名称"><el-input v-model="form.templateName" /></el-form-item>
-        <el-form-item label="模板分类"><el-select v-model="form.templateCategory" :disabled="!!form.templateId" @change="onCategoryChange"><el-option label="报告模板" value="REPORT" /><el-option label="审查模板" value="REVIEW" /></el-select></el-form-item>
-        <el-form-item label="模板类型">
+        <el-form-item label="模板名称" required><el-input v-model="form.templateName" /></el-form-item>
+        <el-form-item label="模板分类" required><el-select v-model="form.templateCategory" :disabled="!!form.templateId" @change="onCategoryChange"><el-option label="报告模板" value="REPORT" /><el-option label="审查模板" value="REVIEW" /></el-select></el-form-item>
+        <el-form-item label="模板类型" required>
           <el-select v-model="form.templateType" filterable allow-create default-first-option>
             <el-option v-for="item in templateTypeOptions" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
         <el-form-item label="适用场景"><el-input v-model="form.scenario" /></el-form-item>
-        <el-form-item label="版本号"><el-input v-model="form.versionNo" /></el-form-item>
+        <el-form-item label="版本号" required><el-input v-model="form.versionNo" /></el-form-item>
         <el-form-item label="说明"><el-input v-model="form.description" type="textarea" /></el-form-item>
-        <el-form-item v-if="!form.templateId" label="模板文件"><AppUpload :model-value="file ? [file] : []" accept=".docx,.txt,.md" :multiple="false" :max-size-mb="50" tip="报告变量解析支持 DOCX、TXT、MD；审查模板也建议使用可解析文本模板" @update:model-value="file = $event[0] || null" /></el-form-item>
+        <el-form-item v-if="!form.templateId" label="模板文件" required><AppUpload :model-value="file ? [file] : []" :accept="templateAccept" :multiple="false" :max-size-mb="50" :tip="templateTip" @update:model-value="file = $event[0] || null" /></el-form-item>
       </el-form>
       <template #footer><el-button @click="dialogVisible=false">取消</el-button><el-button type="primary" :loading="saving" @click="save">保存</el-button></template>
     </el-dialog>
