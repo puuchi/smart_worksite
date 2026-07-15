@@ -1,17 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import AppUpload from '../../components/common/AppUpload.vue';
 import AppTable from '../../components/common/AppTable.vue';
-import JsonViewer from '../../components/common/JsonViewer.vue';
-import TaskProgress from '../../components/common/TaskProgress.vue';
 import StatusTag from '../../components/common/StatusTag.vue';
 import EmptyState from '../../components/common/EmptyState.vue';
-import { deleteOcrRecord, fetchOcrDownloadResult, fetchOcrRecord, fetchOcrRecords, retryOcrRecord, submitOcrRecord, updateOcrFields } from '../../api/ocr';
-import { fetchTaskStages } from '../../api/task';
+import { fetchFileDetail, fetchFilePreviewUrl } from '../../api/file';
+import { deleteOcrRecord, fetchOcrDownloadResult, fetchOcrRecord, fetchOcrRecords, fetchOcrTypes, retryOcrRecord, submitOcrRecord, updateOcrFields } from '../../api/ocr';
 import { useProjectStore } from '../../stores/project';
 import { useUserStore } from '../../stores/user';
-import type { ID, OcrRecord, TaskStageLog } from '../../api/types';
+import type { ID, OcrRecord, OcrTypeTemplate } from '../../api/types';
 
 const projectStore = useProjectStore();
 const userStore = useUserStore();
@@ -22,12 +20,29 @@ const error = ref('');
 const notice = ref('');
 const record = ref<OcrRecord | null>(null);
 const records = ref<OcrRecord[]>([]);
-const logs = ref<TaskStageLog[]>([]);
 const total = ref(0);
 const retryingId = ref<ID | ''>('');
 const deletingId = ref<ID | ''>('');
 const downloadingId = ref<ID | ''>('');
-const ocrType = ref('CUSTOM');
+const OCR_TYPE_STORAGE_KEY = 'smart-worksite:ocr:type';
+const DEFAULT_OCR_TYPE = 'CUSTOM';
+function readStoredOcrType() {
+  try {
+    return localStorage.getItem(OCR_TYPE_STORAGE_KEY) || DEFAULT_OCR_TYPE;
+  } catch {
+    return DEFAULT_OCR_TYPE;
+  }
+}
+function saveStoredOcrType(value: string) {
+  if (!value) return;
+  try {
+    localStorage.setItem(OCR_TYPE_STORAGE_KEY, value);
+  } catch {
+    // localStorage may be unavailable in restricted browser contexts.
+  }
+}
+const ocrType = ref(readStoredOcrType());
+const ocrTypes = ref<OcrTypeTemplate[]>([]);
 const customFields = ref(JSON.stringify([
   { fieldKey: 'partyA', fieldName: '甲方', description: '合同中的甲方名称', required: true, valueType: 'TEXT' },
   { fieldKey: 'partyB', fieldName: '乙方', description: '合同中的乙方名称', required: true, valueType: 'TEXT' },
@@ -35,30 +50,43 @@ const customFields = ref(JSON.stringify([
 ], null, 2));
 const file = ref<File | null>(null);
 const invoiceType = ref('VAT_SPECIAL');
+const previewUrl = ref('');
+const recordPreviewUrl = ref('');
+const recordPreviewName = ref('');
+const recordPreviewIsImage = ref(false);
+const recordPreviewError = ref('');
 const query = reactive({ pageNo: 1, pageSize: 10, status: '', ocrType: '' });
 const currentProjectId = computed(() => projectStore.currentProject?.projectId);
 const canManageOcr = computed(() => userStore.hasPermission('ocr:view'));
 const canSubmit = computed(() => Boolean(canManageOcr.value && currentProjectId.value && file.value && !submitting.value));
-const ocrTypes = [
+const isPreviewImage = computed(() => Boolean(recordPreviewUrl.value ? recordPreviewIsImage.value : file.value?.type.startsWith('image/') && previewUrl.value));
+const activePreviewUrl = computed(() => recordPreviewUrl.value || previewUrl.value);
+const activePreviewName = computed(() => recordPreviewName.value || file.value?.name || '');
+const fallbackOcrTypes = [
   { label: '身份证识别', value: 'ID_CARD' },
   { label: '车牌识别', value: 'LICENSE_PLATE' },
   { label: '发票识别', value: 'INVOICE' },
   { label: '自定义字段识别', value: 'CUSTOM' }
 ];
+const ocrTypeOptions = computed(() => {
+  const source = ocrTypes.value.length
+    ? ocrTypes.value.map((item) => ({ label: item.name, value: item.ocrType }))
+    : fallbackOcrTypes;
+  return source;
+});
 const invoiceTypes = [
   { label: '增值税专用发票', value: 'VAT_SPECIAL' },
   { label: '增值税普通发票', value: 'VAT_NORMAL' }
 ];
 const retryableStatuses = new Set(['FAILED']);
 const downloadableStatuses = new Set(['SUCCESS']);
+const terminalStatuses = new Set(['SUCCESS', 'FAILED', 'CANCELED']);
 const ocrStatuses = ['PENDING', 'PROCESSING', 'SUCCESS', 'FAILED', 'CANCELED'];
+let pollTimer: number | undefined;
+let pollCount = 0;
 
 function normalizeStatus(status?: string) {
   return (status || '').toUpperCase();
-}
-
-function canSaveFields() {
-  return Boolean(canManageOcr.value && record.value && normalizeStatus(record.value.status) === 'SUCCESS');
 }
 
 function canRetryRecord(item: OcrRecord) {
@@ -67,6 +95,39 @@ function canRetryRecord(item: OcrRecord) {
 
 function canDownloadRecord(item: OcrRecord) {
   return downloadableStatuses.has(normalizeStatus(item.status));
+}
+
+function canSaveFields() {
+  return Boolean(canManageOcr.value && record.value && normalizeStatus(record.value.status) === 'SUCCESS');
+}
+
+function ocrTypeLabel(type?: string) {
+  return ocrTypeOptions.value.find((item) => item.value === type)?.label || type || '-';
+}
+
+function clearPreview() {
+  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value);
+  previewUrl.value = '';
+}
+
+function clearRecordPreview() {
+  recordPreviewUrl.value = '';
+  recordPreviewName.value = '';
+  recordPreviewIsImage.value = false;
+  recordPreviewError.value = '';
+}
+
+function handleFileChange(files: File[]) {
+  clearPreview();
+  clearRecordPreview();
+  file.value = files[0] || null;
+  if (file.value?.type.startsWith('image/')) previewUrl.value = URL.createObjectURL(file.value);
+}
+
+function stopPolling() {
+  if (pollTimer) window.clearInterval(pollTimer);
+  pollTimer = undefined;
+  pollCount = 0;
 }
 
 async function loadRecords() {
@@ -96,25 +157,59 @@ async function loadRecords() {
   }
 }
 
-async function loadRecord(recordId: ID, taskId?: ID) {
+async function loadRecord(recordId: ID) {
   try {
     record.value = await fetchOcrRecord(recordId);
-    logs.value = record.value.taskId ? await fetchTaskStages(record.value.taskId) : [];
+    await loadRecordPreview(record.value);
     notice.value = '';
   } catch (err) {
     record.value = null;
-    logs.value = [];
+    clearRecordPreview();
     const detail = err instanceof Error && err.message ? ` ${err.message}` : '';
     notice.value = `OCR 任务已提交，但结果接口暂不可用。${detail}`;
-    if (taskId) {
-      try {
-        logs.value = await fetchTaskStages(taskId);
-      } catch (stageError) {
-        const stageDetail = stageError instanceof Error && stageError.message ? ` ${stageError.message}` : '';
-        notice.value = `${notice.value} 阶段日志也加载失败。${stageDetail}`;
-      }
-    }
   }
+}
+
+async function loadRecordPreview(item: OcrRecord | null) {
+  clearRecordPreview();
+  if (!item?.fileId) return;
+  try {
+    const [detail, access] = await Promise.all([
+      fetchFileDetail(item.fileId),
+      fetchFilePreviewUrl(item.fileId)
+    ]);
+    recordPreviewName.value = detail.fileName || `OCR 文件 #${item.fileId}`;
+    recordPreviewUrl.value = access.url;
+    recordPreviewIsImage.value = Boolean(
+      detail.contentType?.startsWith('image/')
+      || ['jpg', 'jpeg', 'png', 'webp'].includes(String(detail.fileExt || '').toLowerCase())
+    );
+  } catch (err) {
+    recordPreviewError.value = err instanceof Error ? err.message : '原图预览加载失败';
+  }
+}
+
+async function loadOcrTypes() {
+  try {
+    ocrTypes.value = await fetchOcrTypes();
+  } catch {
+    ocrTypes.value = [];
+  }
+  const options = ocrTypeOptions.value;
+  if (!options.some((item) => item.value === ocrType.value)) {
+    ocrType.value = options.some((item) => item.value === DEFAULT_OCR_TYPE) ? DEFAULT_OCR_TYPE : (options[0]?.value || DEFAULT_OCR_TYPE);
+  }
+}
+
+function pollRecord(recordId: ID) {
+  stopPolling();
+  pollTimer = window.setInterval(async () => {
+    pollCount += 1;
+    await loadRecord(recordId);
+    await loadRecords();
+    const status = normalizeStatus(record.value?.status);
+    if (terminalStatuses.has(status) || pollCount >= 60) stopPolling();
+  }, 2000);
 }
 
 function validateCustomFields() {
@@ -146,12 +241,36 @@ async function startOcr() {
       customFields: ocrType.value === 'CUSTOM' ? customFields.value : undefined
     });
     ElMessage.success('OCR 识别任务已提交');
-    await loadRecord(result.recordId, result.taskId);
+    await loadRecord(result.recordId);
     await loadRecords();
+    if (!terminalStatuses.has(normalizeStatus(record.value?.status || result.status))) pollRecord(result.recordId);
   } catch (err) {
     error.value = err instanceof Error ? err.message : '开始识别失败，请确认后端 OCR 接口是否可用。';
   } finally {
     submitting.value = false;
+  }
+}
+
+async function selectRecord(row: OcrRecord) {
+  await loadRecord(row.recordId);
+  if (terminalStatuses.has(normalizeStatus(row.status))) stopPolling();
+  else pollRecord(row.recordId);
+}
+
+async function retryRecord(row: OcrRecord) {
+  if (!canRetryRecord(row)) return ElMessage.warning(`当前 OCR 状态为 ${row.status}，不能重试`);
+  retryingId.value = row.recordId;
+  error.value = '';
+  try {
+    const result = await retryOcrRecord(row.recordId);
+    ElMessage.success('OCR 重试任务已提交');
+    await loadRecord(result.recordId);
+    await loadRecords();
+    pollRecord(result.recordId);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'OCR 重试失败，请检查后端 OCR 接口。';
+  } finally {
+    retryingId.value = '';
   }
 }
 
@@ -171,26 +290,6 @@ async function saveFields() {
   }
 }
 
-async function selectRecord(row: OcrRecord) {
-  await loadRecord(row.recordId, row.taskId);
-}
-
-async function retryRecord(row: OcrRecord) {
-  if (!canRetryRecord(row)) return ElMessage.warning(`当前 OCR 状态为 ${row.status}，不能重试`);
-  retryingId.value = row.recordId;
-  error.value = '';
-  try {
-    const result = await retryOcrRecord(row.recordId);
-    ElMessage.success('OCR 重试任务已提交');
-    await loadRecord(result.recordId, result.taskId);
-    await loadRecords();
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'OCR 重试失败，请检查后端 OCR 接口。';
-  } finally {
-    retryingId.value = '';
-  }
-}
-
 async function removeRecord(row: OcrRecord) {
   if (!canManageOcr.value) return ElMessage.warning('当前账号没有 OCR 操作权限');
   try {
@@ -200,7 +299,7 @@ async function removeRecord(row: OcrRecord) {
     ElMessage.success('OCR 记录已删除');
     if (record.value && String(record.value.recordId) === String(row.recordId)) {
       record.value = null;
-      logs.value = [];
+      clearRecordPreview();
     }
     await loadRecords();
   } catch (err) {
@@ -240,13 +339,22 @@ async function downloadRecord(row: OcrRecord) {
 watch(currentProjectId, () => {
   query.pageNo = 1;
   record.value = null;
-  logs.value = [];
+  clearRecordPreview();
   void loadRecords();
 });
 
+watch(ocrType, (value) => saveStoredOcrType(value));
+
 onMounted(async () => {
   if (!projectStore.currentProject) await projectStore.fetchProjects();
+  await loadOcrTypes();
   await loadRecords();
+});
+
+onUnmounted(() => {
+  stopPolling();
+  clearPreview();
+  clearRecordPreview();
 });
 </script>
 
@@ -257,9 +365,8 @@ onMounted(async () => {
     <div class="page-header">
       <div>
         <h2 class="page-title">OCR 识别</h2>
-        <p class="page-desc">图片/文档上传、识别进度、结构化字段、人工修订和 JSON 下载。</p>
+        <p class="page-desc">图片/文档上传、识别状态和结构化字段展示。</p>
       </div>
-      <el-button type="primary" :loading="loading" :disabled="!canSaveFields()" @click="saveFields">保存修订</el-button>
     </div>
 
     <el-card class="work-card">
@@ -271,7 +378,7 @@ onMounted(async () => {
               <el-option v-for="item in ocrStatuses" :key="item" :label="item" :value="item" />
             </el-select>
             <el-select v-model="query.ocrType" clearable placeholder="类型" style="width: 160px" @change="loadRecords">
-              <el-option v-for="item in ocrTypes" :key="item.value" :label="item.label" :value="item.value" />
+              <el-option v-for="item in ocrTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
             <el-button @click="loadRecords">刷新</el-button>
           </div>
@@ -280,12 +387,13 @@ onMounted(async () => {
       <AppTable
         :loading="recordsLoading"
         :data="records"
+        max-height="276"
         :total="total"
         :page-no="query.pageNo"
         :page-size="query.pageSize"
         :columns="[
           { prop: 'recordId', label: 'ID', width: 90 },
-          { prop: 'ocrType', label: '类型', width: 150 },
+          { prop: 'ocrType', label: '类型', slot: 'ocrType', width: 150 },
           { prop: 'status', label: '状态', slot: 'status', width: 110 },
           { prop: 'progress', label: '进度', width: 90 },
           { prop: 'updatedAt', label: '更新时间', width: 180 }
@@ -293,6 +401,7 @@ onMounted(async () => {
         @page-change="(p, s) => { query.pageNo = p; query.pageSize = s; loadRecords(); }"
       >
         <template #empty><EmptyState description="暂无 OCR 记录" /></template>
+        <template #ocrType="{ row }">{{ ocrTypeLabel(row.ocrType) }}</template>
         <template #status="{ row }"><StatusTag :status="row.status" /></template>
         <el-table-column label="操作" width="250">
           <template #default="{ row }">
@@ -311,7 +420,7 @@ onMounted(async () => {
         <el-form label-width="88px">
           <el-form-item label="OCR 类型" required>
             <el-select v-model="ocrType" style="width: 100%">
-              <el-option v-for="item in ocrTypes" :key="item.value" :label="item.label" :value="item.value" />
+              <el-option v-for="item in ocrTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
           </el-form-item>
           <el-form-item v-if="ocrType === 'CUSTOM'" label="自定义字段" required>
@@ -335,35 +444,44 @@ onMounted(async () => {
           :multiple="false"
           tip="支持身份证、车牌、发票和自定义字段识别"
           :uploading="submitting"
-          @update:model-value="file = $event[0] || null"
+          @update:model-value="handleFileChange"
         />
         <el-button type="primary" style="margin-top: 12px" :loading="submitting" :disabled="!canSubmit" @click="startOcr">开始识别</el-button>
-        <div class="preview">{{ file?.name || '文件预览区' }}</div>
+        <div class="preview">
+          <img v-if="isPreviewImage && activePreviewUrl" :src="activePreviewUrl" :alt="activePreviewName || '识别文件预览'" />
+          <a v-else-if="activePreviewUrl" :href="activePreviewUrl" target="_blank" rel="noopener">{{ activePreviewName || '打开原文件预览' }}</a>
+          <span v-else>{{ recordPreviewError || activePreviewName || '文件预览区' }}</span>
+        </div>
       </el-card>
 
       <el-card class="work-card" v-loading="loading || submitting">
-        <h3 class="panel-title">识别字段</h3>
-        <TaskProgress v-if="record" :percentage="record.progress" :status="record.status" :logs="logs" />
+        <div class="field-head">
+          <h3 class="panel-title">识别字段</h3>
+          <el-button type="primary" :loading="loading" :disabled="!canSaveFields()" @click="saveFields">保存修订</el-button>
+        </div>
         <EmptyState v-if="!record" description="暂无 OCR 记录，请上传文件后开始识别" />
-        <AppTable
-          v-else
-          :data="record.fields"
-          :columns="[
-            { prop: 'fieldName', label: '字段' },
-            { prop: 'fieldValue', label: '识别值' },
-            { prop: 'confidence', label: '置信度' },
-            { prop: 'location', label: '位置' }
-          ]"
-        >
-          <template #empty><EmptyState description="暂无识别字段" /></template>
-          <el-table-column label="修订">
-            <template #default="{ row }"><el-input v-model="row.fieldValue" :disabled="!canSaveFields()" /></template>
-          </el-table-column>
-        </AppTable>
+        <template v-else>
+          <div class="ocr-record-status">
+            <span>{{ ocrTypeLabel(record.ocrType) }}</span>
+            <StatusTag :status="record.status" />
+            <span>{{ record.updatedAt }}</span>
+          </div>
+          <AppTable
+            :data="record.fields"
+            max-height="360"
+            :columns="[
+              { prop: 'fieldName', label: '字段' },
+              { prop: 'fieldValue', label: '识别值', slot: 'fieldValue' }
+            ]"
+          >
+            <template #empty><EmptyState description="暂无识别字段" /></template>
+            <template #fieldValue="{ row }">
+              <el-input v-model="row.fieldValue" :disabled="!canSaveFields()" placeholder="可修订识别值" />
+            </template>
+          </AppTable>
+        </template>
       </el-card>
     </div>
-
-    <JsonViewer v-if="record" :value="record" title="OCR JSON 结果" />
   </div>
 </template>
 
@@ -371,7 +489,10 @@ onMounted(async () => {
 .table-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .table-head > div { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .upload-title { margin: 4px 0 10px; font-weight: 700; }
-.preview { height: 180px; margin-top: 14px; border: 1px dashed var(--sw-border); border-radius: 12px; display: grid; place-items: center; color: var(--sw-muted); background: #f8fafc; }
+.preview { min-height: 220px; margin-top: 14px; padding: 8px; border: 1px dashed var(--sw-border); border-radius: 12px; display: grid; place-items: center; color: var(--sw-muted); background: #f8fafc; overflow: auto; }
+.preview img { display: block; max-width: 100%; max-height: 420px; width: auto; height: auto; object-fit: contain; }
+.ocr-record-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; color: var(--sw-muted); font-size: 13px; }
+.field-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
 @media (max-width: 768px) {
   .table-head { align-items: flex-start; flex-direction: column; }
 }
