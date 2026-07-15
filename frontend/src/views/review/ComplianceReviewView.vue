@@ -46,7 +46,9 @@ const reviewSteps = [
 ];
 
 function t(text: string) { return text; }
-function goTemplates() { router.push('/templates'); }
+function goTemplates() {
+  router.push({ path: '/templates', query: { category: 'REVIEW', action: 'upload' } });
+}
 function progressOf(record: ReviewRecord) { return ['SUCCESS', 'COMPLETED', 'FAILED', 'ARCHIVED'].includes(String(record.status)) ? 100 : 60; }
 function canUpdateIssue(record: ReviewRecord | null) { return canManageReview.value && record?.status === 'COMPLETED'; }
 
@@ -138,6 +140,7 @@ onMounted(loadTemplates);
         <h2 class="page-title">{{ t('合规审查') }}</h2>
         <p class="page-desc">{{ t('按“准备模板 → 上传文件 → 发起审查 → 处理问题”的顺序使用。') }}</p>
       </div>
+      <el-button type="primary" plain @click="goTemplates">{{ t('上传审查模板') }}</el-button>
     </div>
     <div class="review-guide">
       <div v-for="(item, index) in reviewSteps" :key="item.title" class="guide-step" :class="{ active: !templates.length && index === 0 }">
@@ -166,6 +169,9 @@ onMounted(loadTemplates);
             <el-select v-model="selectedTemplateId" style="width: 260px" :placeholder="t('请选择模板')">
               <el-option v-for="item in templates" :key="item.templateId" :label="item.templateName" :value="item.templateId" />
             </el-select>
+          </el-form-item>
+          <el-form-item>
+            <el-button @click="goTemplates">{{ t('上传模板') }}</el-button>
           </el-form-item>
           <el-form-item>
             <el-button v-if="canManageReview" type="primary" :loading="submitting" :disabled="!canSubmit" @click="submit">{{ t('3. 发起审查') }}</el-button>

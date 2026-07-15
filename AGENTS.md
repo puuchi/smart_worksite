@@ -133,6 +133,10 @@ Business modules may use these layers as needed: `controller`, `application`, `d
 - QA APIs must call the AI adapter/Python service for generated answers. Do not create fake answers, canned fallback text, or silent success when model, RAG, or database QA calls fail.
 - QA message requests must validate `knowledgeBaseIds` and `dataSourceIds` before calling AI: each referenced knowledge base or data source must exist, belong to the QA session project, and be `ENABLED`; cross-project or disabled references must fail fast.
 - QA message creation and answer persistence must be observable: inserted message IDs must be usable, answer updates must check affected rows, and failed persistence must return conflict instead of reporting a successful AI answer.
+- QA frontend history must preserve user questions when reloading sessions; if the backend returns combined `question` and `answer` records, render the question as the user's right-side message and the answer as the assistant's left-side message.
+- QA frontend answers should render readable Markdown-style structure after escaping content, and question submission must show an in-progress answer placeholder while the backend is generating.
+- QA frontend in-progress question editing should be handled by withdrawing the local pending message and ignoring stale responses; do not pretend a backend request was canceled unless cancellation is actually supported.
+- QA frontend answer-format parsing should stay in a dedicated utility instead of growing the page component; unsafe or non-standard model text must be escaped first and degraded to readable paragraphs when structure cannot be parsed reliably.
 - Review APIs must call the AI adapter/Python Agent for compliance results. Do not create fake issue lists, default pass results, or silent success when the Agent returns empty, invalid, or failed results. Persist failed review records with observable error details.
 - Review execution failure handling must check failed-state persistence; if a failed review record cannot be marked `FAILED` with error details, return a conflict instead of losing observability.
 - Review submit APIs must read back the inserted review record before calling the Agent; missing generated IDs or unreadable records must fail before external AI execution.
@@ -229,12 +233,15 @@ Request IDs are handled by `common.config.RequestIdFilter`. The response header 
 - Frontend action buttons for state-machine APIs must follow backend allowed transitions: disable retry/cancel/download/content/regenerate actions when the current row status cannot accept that operation, while leaving backend fail-fast conflicts intact for stale clients.
 - Knowledge document indexing actions must be state-aware: allow submit/retry only for `PENDING` and `FAILED`, disable repeat submission for `INDEXING` or `SUCCESS`, and require a successful file parse result before triggering indexing.
 - OCR invoice submission must expose and send `invoiceType` as `VAT_SPECIAL` or `VAT_NORMAL`; do not let invoice recognition submit without this backend-required option.
+- OCR frontend submissions should automatically refresh the submitted record and list status until a terminal state; OCR type labels should use the same type metadata as the OCR type selector.
 - Report and review creation pages must load only enabled templates. Review issue status updates must use backend enum values `OPEN`, `PROCESSING`, `RESOLVED`, and `IGNORED`.
+- The compliance review page must provide an upload-template entry that navigates to template management with the review-template category selected.
 - Template upload UI should restrict report/review template files to formats the backend can parse for variables or review context; do not present unsupported template formats as normal upload options.
 - Single-file business flows such as template upload, review submit, and OCR submit must render upload controls as single-file controls; do not allow multi-select and then silently submit only the first file.
 - Report and review creation pages must load only enabled templates. Review issue status updates must use backend enum values `OPEN`, `PROCESSING`, `RESOLVED`, and `IGNORED`.
 - Template upload UI should restrict report/review template files to formats the backend can parse for variables or review context; do not present unsupported template formats as normal upload options.
 - Single-file business flows such as template upload, review submit, and OCR submit must render upload controls as single-file controls; do not allow multi-select and then silently submit only the first file.
+- Single-file upload controls should replace the existing selected file when the user selects another file, instead of keeping stale preview or upload state.
 - Policy/news crawler UI may use an explicit `VITE_USE_POLICY_MOCK` switch until Java backend policy APIs exist; frontend must still never crawl external websites or call Python services directly.
 - AI results should expose traceable information where available, such as sources, confidence, raw JSON, or document references.
 - Frontend report-template upload APIs must pass explicit `templateName` and `templateType`; do not derive them from the filename or rely on backend fallback metadata.
@@ -248,6 +255,7 @@ Request IDs are handled by `common.config.RequestIdFilter`. The response header 
 - Use a left-side menu, top project switcher, and card-based content sections.
 - The frontend navigation should follow user task flow instead of implementation modules: keep `工作台`, group `智能问答`、`合规审查`、`报告生成`、`OCR识别` under intelligent applications, group knowledge bases/data sources under knowledge assets, and keep tasks/audit/configuration as supporting areas. Review document upload belongs inside `合规审查`, not as a separate left-menu entry.
 - The workbench should make the four primary user actions obvious on first screen: ask questions, review documents, generate reports, and recognize materials.
+- The main frontend shell should keep the left navigation and top project bar fixed while page content scrolls independently; long local panels such as QA session/message lists and OCR tables should use their own scroll areas when that preserves context.
 - Do not use a pure big-screen dashboard style.
 - Do not use dark mode as the default.
 - Do not use a flashy consumer AI chat product style.

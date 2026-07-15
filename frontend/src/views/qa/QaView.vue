@@ -9,6 +9,7 @@ import { useProjectStore } from '../../stores/project';
 import { useUserStore } from '../../stores/user';
 import type { DataSourceItem, ID, KnowledgeBase, QaMessage, QaSession } from '../../api/types';
 import { hasSuspiciousText } from '../../utils/textQuality';
+import { renderQaMarkdown } from '../../utils/qaMarkdown';
 
 type QaMessageExtra = QaMessage & Record<string, unknown>;
 
@@ -39,6 +40,7 @@ const selectedKnowledgeBaseIds = ref<ID[]>([]);
 const selectedDataSourceId = ref<ID | ''>('');
 const resourceLoading = ref(false);
 const resourceError = ref('');
+const activeSend = ref<{ token: string; userMessageId: ID; pendingMessageId: ID; content: string } | null>(null);
 
 const activeSession = computed(() => sessions.value.find((item) => String(item.sessionId) === String(activeSessionId.value)) || null);
 const enabledKnowledgeBases = computed(() => knowledgeBases.value.filter((item) => ['ENABLED', 'ACTIVE'].includes(String(item.status).toUpperCase())));
@@ -48,6 +50,46 @@ const qaManageTip = '当前账号没有问答操作权限';
 
 function t(text: string) { return text; }
 function localId() { return Number(`${Date.now()}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`); }
+function messageRole(msg: QaMessageExtra) {
+  return String(msg.role || 'assistant').toLowerCase();
+}
+
+function messageText(msg: QaMessageExtra) {
+  return String(msg.content || msg.answer || msg.question || '');
+}
+
+function renderMessageHtml(msg: QaMessageExtra) {
+  return renderQaMarkdown(messageText(msg));
+}
+
+function createQuestionMessage(source: QaMessageExtra): QaMessageExtra {
+  return {
+    ...source,
+    messageId: `${source.messageId}-question`,
+    role: 'user',
+    content: source.question,
+    answer: undefined,
+    references: [],
+    needClarification: false,
+    clarificationQuestions: []
+  };
+}
+
+function normalizeMessages(records: QaMessageExtra[]) {
+  const normalized: QaMessageExtra[] = [];
+  records.forEach((record) => {
+    const role = messageRole(record);
+    if (role === 'user') {
+      normalized.push({ ...record, role: 'user', content: messageText(record) });
+      return;
+    }
+    if (record.question && normalized[normalized.length - 1]?.role !== 'user') {
+      normalized.push(createQuestionMessage(record));
+    }
+    normalized.push({ ...record, role: 'assistant', content: record.answer || record.content || '' });
+  });
+  return normalized;
+}
 
 function createLocalUserMessage(sessionId: ID, projectId: ID, content: string): QaMessageExtra {
   const now = new Date().toISOString();
@@ -59,6 +101,12 @@ function createErrorAssistantMessage(sessionId: ID, projectId: ID, content: stri
   const now = new Date().toISOString();
   const id = localId();
   return { messageId: id, sessionId, projectId, role: 'assistant', content, answer: content, status: 'FAILED', createdAt: now, updatedAt: now, references: [] };
+}
+
+function createPendingAssistantMessage(sessionId: ID, projectId: ID): QaMessageExtra {
+  const now = new Date().toISOString();
+  const id = `pending-${localId()}`;
+  return { messageId: id, sessionId, projectId, role: 'assistant', content: '正在生成回答，请稍候...', answer: '正在生成回答，请稍候...', status: 'RUNNING', createdAt: now, updatedAt: now, references: [], pending: true };
 }
 
 async function loadResources(projectId: ID) {
@@ -118,7 +166,7 @@ async function switchSession(sessionId: ID) {
   messages.value = [];
   try {
     await fetchQaSessionDetail(sessionId);
-    messages.value = await fetchQaMessages(sessionId) as QaMessageExtra[];
+    messages.value = normalizeMessages(await fetchQaMessages(sessionId) as QaMessageExtra[]);
   } catch (err) {
     messageError.value = err instanceof Error ? err.message : t('会话消息加载失败，请检查后端问答接口。');
   } finally {
@@ -170,7 +218,7 @@ async function regenerateAnswer(msg: QaMessageExtra) {
   regeneratingId.value = msg.messageId;
   try {
     const answer = await regenerateMessage(activeSessionId.value, msg.messageId) as QaMessageExtra;
-    messages.value.push(answer);
+    messages.value.push({ ...answer, role: 'assistant', content: answer.answer || answer.content || '' });
     ElMessage.success('答案已重新生成');
   } catch (err) {
     ElMessage.error(err instanceof Error ? err.message : '重新生成失败');
@@ -226,7 +274,12 @@ async function ask() {
   sending.value = true;
   messageError.value = '';
   const sessionId = activeSessionId.value;
-  messages.value.push(createLocalUserMessage(sessionId, projectId, content));
+  const userMessage = createLocalUserMessage(sessionId, projectId, content);
+  messages.value.push(userMessage);
+  const pendingMessage = createPendingAssistantMessage(sessionId, projectId);
+  messages.value.push(pendingMessage);
+  const sendToken = `${Date.now()}-${Math.random()}`;
+  activeSend.value = { token: sendToken, userMessageId: userMessage.messageId, pendingMessageId: pendingMessage.messageId, content };
   question.value = '';
   try {
     const payload = {
@@ -236,13 +289,34 @@ async function ask() {
       dataSourceIds: ['AUTO', 'DATABASE', 'MIXED'].includes(routeMode.value) && selectedDataSourceId.value ? [selectedDataSourceId.value] : []
     };
     const answer = await sendQuestion(sessionId, payload, projectId) as QaMessageExtra;
-    messages.value.push(answer);
+    if (activeSend.value?.token !== sendToken) return;
+    const pendingIndex = messages.value.findIndex((msg) => String(msg.messageId) === String(pendingMessage.messageId));
+    const nextAnswer = { ...answer, role: 'assistant', content: answer.answer || answer.content || '' };
+    if (pendingIndex >= 0) messages.value.splice(pendingIndex, 1, nextAnswer);
+    else messages.value.push(nextAnswer);
   } catch (err) {
+    if (activeSend.value?.token !== sendToken) return;
     const detail = err instanceof Error && err.message ? ` ${err.message}` : '';
-    messages.value.push(createErrorAssistantMessage(sessionId, projectId, `${t('问题发送失败，请检查后端问答接口。')}${detail}`));
+    const pendingIndex = messages.value.findIndex((msg) => String(msg.messageId) === String(pendingMessage.messageId));
+    const errorMessage = createErrorAssistantMessage(sessionId, projectId, `${t('问题发送失败，请检查后端问答接口。')}${detail}`);
+    if (pendingIndex >= 0) messages.value.splice(pendingIndex, 1, errorMessage);
+    else messages.value.push(errorMessage);
   } finally {
-    sending.value = false;
+    if (activeSend.value?.token === sendToken) {
+      activeSend.value = null;
+      sending.value = false;
+    }
   }
+}
+
+function withdrawCurrentQuestion() {
+  if (!activeSend.value) return;
+  const current = activeSend.value;
+  messages.value = messages.value.filter((msg) => ![current.userMessageId, current.pendingMessageId].some((id) => String(id) === String(msg.messageId)));
+  question.value = current.content;
+  activeSend.value = null;
+  sending.value = false;
+  ElMessage.info('已撤回到输入框，可修改后重新发送。');
 }
 
 async function feedback(message: QaMessageExtra, useful: boolean) {
@@ -261,7 +335,7 @@ onMounted(() => loadSessions());
 </script>
 
 <template>
-  <div class="page">
+  <div class="page qa-page">
     <div class="page-header">
       <div>
         <h2 class="page-title">{{ t('知识问答') }}</h2>
@@ -271,7 +345,7 @@ onMounted(() => loadSessions());
     </div>
 
     <div class="three-col">
-      <el-card class="work-card" v-loading="sessionLoading">
+      <el-card class="work-card session-card" v-loading="sessionLoading">
         <h3 class="panel-title">{{ t('会话列表') }}</h3>
         <el-alert v-if="sessionError" :title="sessionError" type="error" show-icon :closable="false" style="margin-bottom: 12px" />
         <EmptyState v-if="!sessions.length" :description="t('暂无会话，请新建会话。')" />
@@ -307,36 +381,34 @@ onMounted(() => loadSessions());
             <el-option v-for="item in enabledDataSources" :key="item.dataSourceId" :label="item.name" :value="item.dataSourceId" />
           </el-select>
         </div>
-        <EmptyState v-if="!messages.length" :description="t('暂无消息，请输入问题开始问答。')" />
-        <div v-for="msg in messages" :key="msg.messageId" class="chat" :class="String(msg.role || 'assistant')">
-          <b>{{ msg.role === 'user' ? t('我') : t('AI助手') }}</b>
-          <el-tag v-if="hasSuspiciousText(msg.content || msg.answer)" type="warning" size="small" style="margin-left: 6px">疑似历史乱码数据</el-tag>
-          <p>{{ msg.content || msg.answer }}</p>
-          <template v-if="msg.role === 'assistant'">
-            <div class="answer-meta"><el-tag size="small">路由：{{ msg.routeMode || routeMode }}</el-tag><el-tag v-if="msg.providerTraceId" size="small" type="info">Trace: {{ msg.providerTraceId }}</el-tag></div>
-            <div v-if="msg.needClarification || msg.clarificationQuestions?.length" class="clarify-block"><strong>{{ t('需要补充的信息') }}</strong><ul><li v-for="item in msg.clarificationQuestions" :key="item">{{ item }}</li></ul></div>
-            <div class="reference-block">
-              <strong>{{ t('来源引用') }}</strong>
-              <EmptyState v-if="!msg.references?.length" :description="t('暂无来源引用。')" />
-              <div v-for="source in msg.references" :key="`${msg.messageId}-${source.title}-${source.page}`" class="source">
-                <b>{{ source.title }}</b>
-                <p class="muted">{{ t('来源：') }}{{ source.sourceType }} / {{ t('位置：') }}{{ source.page || '-' }} / {{ t('分数：') }}{{ source.score }}</p>
+        <div class="message-scroll">
+          <EmptyState v-if="!messages.length" :description="t('暂无消息，请输入问题开始问答。')" />
+          <div v-for="msg in messages" :key="msg.messageId" class="chat" :class="[messageRole(msg), { pending: msg.pending }]">
+            <el-tag v-if="hasSuspiciousText(msg.content || msg.answer)" type="warning" size="small" style="margin-left: 6px">疑似历史乱码数据</el-tag>
+            <div v-if="msg.pending" class="typing-indicator" aria-live="polite"><span></span><span></span><span></span>{{ t('AI 正在生成回答') }}</div>
+            <div v-else class="message-body" v-html="renderMessageHtml(msg)"></div>
+            <template v-if="messageRole(msg) === 'assistant'">
+              <div v-if="msg.needClarification || msg.clarificationQuestions?.length" class="clarify-block"><strong>{{ t('需要补充的信息') }}</strong><ul><li v-for="item in msg.clarificationQuestions" :key="item">{{ item }}</li></ul></div>
+              <div v-if="!msg.pending" class="feedback">
+                <span v-if="feedbackMap[String(msg.messageId)] !== undefined">{{ t('已反馈：') }}{{ feedbackMap[String(msg.messageId)] ? t('有用') : t('无用') }}</span>
+                <template v-else>
+                  <el-button v-if="canManageQa" size="small" @click="feedback(msg, true)">{{ t('有用') }}</el-button>
+                  <el-button v-if="canManageQa" size="small" @click="feedback(msg, false)">{{ t('无用') }}</el-button>
+                </template>
+                <el-button size="small" @click="openMessageDetail(msg)">详情/引用</el-button>
+                <el-button v-if="canManageQa" size="small" type="primary" :loading="String(regeneratingId) === String(msg.messageId)" @click="regenerateAnswer(msg)">重新生成</el-button>
               </div>
-            </div>
-            <div class="feedback">
-              <span v-if="feedbackMap[String(msg.messageId)] !== undefined">{{ t('已反馈：') }}{{ feedbackMap[String(msg.messageId)] ? t('有用') : t('无用') }}</span>
-              <template v-else>
-                <el-button v-if="canManageQa" size="small" @click="feedback(msg, true)">{{ t('有用') }}</el-button>
-                <el-button v-if="canManageQa" size="small" @click="feedback(msg, false)">{{ t('无用') }}</el-button>
-              </template>
-              <el-button size="small" @click="openMessageDetail(msg)">详情/引用</el-button>
-              <el-button v-if="canManageQa" size="small" type="primary" :loading="String(regeneratingId) === String(msg.messageId)" @click="regenerateAnswer(msg)">重新生成</el-button>
-            </div>
-          </template>
+            </template>
+          </div>
         </div>
-        <div class="input-label required-label">{{ t('问题内容') }}</div>
-        <el-input v-model="question" type="textarea" :rows="3" :placeholder="canManageQa ? t('\u8bf7\u8f93\u5165\u95ee\u9898') : qaManageTip" :disabled="!canManageQa" @keyup.ctrl.enter="ask" />
-        <el-button v-if="canManageQa" type="primary" style="margin-top: 10px" :loading="sending" :disabled="sending" @click="ask">{{ t('发送') }}</el-button>
+        <div class="qa-input-area">
+          <div class="input-label required-label">{{ t('问题内容') }}</div>
+          <el-input v-model="question" type="textarea" :rows="3" :placeholder="canManageQa ? t('\u8bf7\u8f93\u5165\u95ee\u9898') : qaManageTip" :disabled="!canManageQa || sending" @keyup.ctrl.enter="ask" />
+          <div v-if="canManageQa" class="send-actions">
+            <el-button type="primary" :loading="sending" :disabled="sending" @click="ask">{{ t('发送') }}</el-button>
+            <el-button v-if="sending" @click="withdrawCurrentQuestion">{{ t('撤回编辑') }}</el-button>
+          </div>
+        </div>
       </el-card>
     </div>
     <el-dialog v-model="renameDialogVisible" title="修改会话标题" width="420px">
@@ -365,16 +437,35 @@ onMounted(() => loadSessions());
 </template>
 
 <style scoped>
-.three-col { display: grid; grid-template-columns: 280px 1fr; gap: 16px; align-items: start; }
-.session-list { display: grid; gap: 10px; }
+.qa-page { height: 100%; min-height: 0; overflow: hidden; }
+.three-col { flex: 1; min-height: 0; display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; align-items: stretch; }
+.session-card, .qa-main { min-height: 0; overflow: hidden; }
+.session-card :deep(.el-card__body), .qa-main :deep(.el-card__body) { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.session-list { flex: 1; min-height: 0; overflow: auto; display: grid; align-content: start; gap: 10px; padding-right: 2px; }
 .session-item { text-align: left; border: 1px solid var(--sw-border); border-radius: 10px; background: #fff; padding: 12px; cursor: pointer; display: grid; gap: 6px; }
 .session-item.active { border-color: var(--sw-primary); box-shadow: 0 0 0 3px rgba(30, 94, 255, 0.12); }
 .session-item span, .muted { color: var(--sw-muted); font-size: 12px; }
 .session-actions { display: flex; gap: 8px; }
-.chat { padding: 12px; border: 1px solid var(--sw-border); border-radius: 12px; margin-bottom: 12px; }
-.chat.user { background: #f8fafc; }
-.chat.assistant { background: #fff; }
-.chat p { margin: 6px 0; }
+.message-scroll { flex: 1; min-height: 0; overflow: auto; padding: 4px 8px 4px 0; }
+.chat { padding: 12px 14px; border: 1px solid var(--sw-border); border-radius: 12px; margin-bottom: 18px; }
+.chat.user { width: fit-content; max-width: min(620px, 62%); margin-left: auto; background: #eaf3ff; border-color: #bfdbfe; text-align: left; }
+.chat.assistant { width: min(1040px, calc(100% - 96px)); margin-right: auto; background: #fff; text-align: left; }
+.chat.pending { border-color: #bfdbfe; background: #f8fbff; }
+.message-body :deep(p) { margin: 8px 0; line-height: 1.75; white-space: normal; }
+.message-body :deep(h3), .message-body :deep(h4), .message-body :deep(h5), .message-body :deep(h6) { margin: 12px 0 8px; line-height: 1.45; color: #0f172a; }
+.message-body :deep(ul), .message-body :deep(ol) { margin: 8px 0; padding-left: 20px; line-height: 1.7; }
+.message-body :deep(code) { padding: 1px 5px; border-radius: 5px; background: #eef2ff; color: #1d4ed8; font-family: Consolas, monospace; }
+.message-body :deep(table) { width: 100%; margin: 10px 0; border-collapse: collapse; font-size: 13px; }
+.message-body :deep(th), .message-body :deep(td) { border: 1px solid var(--sw-border); padding: 8px 10px; vertical-align: top; }
+.message-body :deep(th) { background: #f1f5f9; color: #0f172a; font-weight: 700; }
+.message-body :deep(.qa-code) { margin: 10px 0; padding: 10px; overflow: auto; border-radius: 8px; background: #0f172a; color: #e2e8f0; white-space: pre-wrap; }
+.message-body :deep(.qa-code code) { padding: 0; background: transparent; color: inherit; }
+.message-body :deep(.qa-code span) { color: #93c5fd; }
+.typing-indicator { display: inline-flex; align-items: center; gap: 6px; color: var(--sw-muted); font-size: 13px; }
+.typing-indicator span { width: 6px; height: 6px; border-radius: 999px; background: var(--sw-primary); animation: qa-typing 1.2s infinite ease-in-out; }
+.typing-indicator span:nth-child(2) { animation-delay: 0.15s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes qa-typing { 0%, 80%, 100% { opacity: 0.35; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
 .answer-meta { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
 .clarify-block { margin-top: 10px; padding: 10px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; }
 .clarify-block ul { margin: 6px 0 0; padding-left: 18px; }
@@ -382,9 +473,11 @@ onMounted(() => loadSessions());
 .source { padding: 8px 0; border-bottom: 1px solid var(--sw-border); }
 .feedback { margin-top: 8px; display: flex; gap: 8px; align-items: center; color: var(--sw-muted); }
 .qa-options { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.qa-input-area { flex-shrink: 0; padding-top: 10px; border-top: 1px solid var(--sw-border); background: #fff; }
+.send-actions { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
 .option-label { display: inline-flex; align-items: center; height: 32px; color: var(--sw-muted); font-size: 13px; }
 .input-label { margin: 10px 0 8px; font-weight: 700; }
 .refs-title { margin-top: 16px; }
 .json-block { white-space: pre-wrap; background: #f8fafc; border: 1px solid var(--sw-border); border-radius: 10px; padding: 12px; max-height: 320px; overflow: auto; }
-@media (max-width: 960px) { .three-col { grid-template-columns: 1fr; } }
+@media (max-width: 960px) { .qa-page { height: auto; overflow: visible; } .three-col { grid-template-columns: 1fr; } .session-card, .qa-main { overflow: visible; } .message-scroll, .session-list { max-height: none; overflow: visible; } }
 </style>

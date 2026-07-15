@@ -7,6 +7,7 @@ withDefaults(defineProps<{
   total?: number;
   pageNo?: number;
   pageSize?: number;
+  maxHeight?: number | string;
 }>(), { total: 0, pageNo: 1, pageSize: 10 });
 const emit = defineEmits<{ pageChange: [pageNo: number, pageSize: number] }>();
 function onPageChange(page: number, size: number) { emit('pageChange', page, size); }
@@ -14,7 +15,7 @@ function onPageChange(page: number, size: number) { emit('pageChange', page, siz
 
 <template>
   <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" style="margin-bottom: 12px" />
-  <el-table v-loading="loading" :data="data" border stripe style="width: 100%">
+  <el-table v-loading="loading" :data="data" :max-height="maxHeight" border stripe style="width: 100%">
     <template #empty><slot name="empty"><el-empty description="暂无数据" /></slot></template>
     <el-table-column v-for="col in columns" :key="col.prop" :prop="col.prop" :label="col.label" :width="col.width">
       <template v-if="col.slot" #default="scope"><slot :name="col.slot" v-bind="scope" /></template>

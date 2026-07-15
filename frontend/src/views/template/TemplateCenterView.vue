@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
+import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import AppTable from '../../components/common/AppTable.vue';
 import AppUpload from '../../components/common/AppUpload.vue';
@@ -12,6 +13,7 @@ import { hasSuspiciousText } from '../../utils/textQuality';
 
 const projectStore = useProjectStore();
 const userStore = useUserStore();
+const route = useRoute();
 const loading = ref(false);
 const saving = ref(false);
 const error = ref('');
@@ -50,6 +52,12 @@ async function loadRows() {
     pager.total = 0;
     error.value = err instanceof Error ? err.message : '模板列表加载失败，请检查后端模板接口。';
   } finally { loading.value = false; }
+}
+
+function readCategoryQuery() {
+  return route.query.category === 'REVIEW' || route.query.category === 'REPORT'
+    ? String(route.query.category)
+    : '';
 }
 
 function defaultType(category: string) {
@@ -169,7 +177,13 @@ async function remove(row: TemplateItem) {
     ElMessage.error(`模板删除失败，请检查后端模板接口。${detail}`);
   }
 }
-onMounted(async () => { if (!projectStore.currentProject) await projectStore.fetchProjects(); await loadRows(); });
+onMounted(async () => {
+  const category = readCategoryQuery();
+  if (category) pager.templateCategory = category;
+  if (!projectStore.currentProject) await projectStore.fetchProjects();
+  await loadRows();
+  if (route.query.action === 'upload' && category) openCreate(category);
+});
 </script>
 
 <template>

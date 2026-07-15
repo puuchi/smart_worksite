@@ -25,7 +25,7 @@ const articles = ref<PolicyArticle[]>([]);
 const articlePager = reactive({ pageNo: 1, pageSize: 10, total: 0, keyword: '', sourceId: '' as ID | '', indexStatus: '' });
 const form = reactive({ sourceId: '' as ID | '', name: '', url: '', crawlFrequency: 'DAILY', description: '' });
 const projectId = computed(() => projectStore.currentProject?.projectId || '');
-const mockNotice = '当前模块为前端 Mock 演示：不会直接爬取互联网，也不会调用 Python 或外部网站；真实接口已按 /api/policy/** 预留。';
+
 
 function resetForm() {
   Object.assign(form, { sourceId: '', name: '', url: '', crawlFrequency: 'DAILY', description: '' });
@@ -171,7 +171,6 @@ onMounted(refreshAll);
         <el-button type="primary" @click="openCreate">新增政策源</el-button>
       </div>
     </div>
-    <el-alert :title="mockNotice" type="info" show-icon :closable="false" />
 
     <div class="two-col policy-grid">
       <el-card class="work-card">

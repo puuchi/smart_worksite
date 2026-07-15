@@ -200,7 +200,6 @@ onMounted(async () => {
 
     <el-card class="work-card">
       <template #header><strong>数据库问答</strong></template>
-      <el-alert title="数据库问答由后端调用 Python 生成 SQL，Java 后端只执行安全只读 SQL；失败会直接显示真实错误。" type="info" show-icon :closable="false" style="margin-bottom: 12px" />
       <div class="field-title required-label">业务数据问题</div>
       <el-input v-model="question" type="textarea" :rows="3" placeholder="请输入业务数据问题" />
       <el-button type="primary" :loading="querying" style="margin-top:12px" @click="ask">生成查询</el-button>

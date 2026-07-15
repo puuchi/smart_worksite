@@ -128,7 +128,7 @@ async function submitPasswordChange() {
         </template>
       </el-menu>
     </el-aside>
-    <el-container>
+    <el-container class="main-shell">
       <el-header class="topbar" height="64px">
         <div>
           <div class="current-project">当前项目：{{ currentProject?.name || currentProject?.projectName || '未选择' }}</div>
@@ -167,12 +167,15 @@ async function submitPasswordChange() {
 </template>
 
 <style scoped>
-.main-layout { min-height: 100vh; background: var(--sw-bg); }
-.sidebar { background: linear-gradient(180deg, #0f2f63 0%, #133a74 58%, #0f766e 135%); color: #fff; }
+.main-layout { height: 100vh; background: var(--sw-bg); overflow: hidden; }
+.main-shell { min-width: 0; height: 100vh; overflow: hidden; }
+.sidebar { height: 100vh; background: linear-gradient(180deg, #0f2f63 0%, #133a74 58%, #0f766e 135%); color: #fff; display: flex; flex-direction: column; overflow: hidden; }
 .brand { height: 64px; display: flex; align-items: center; gap: 12px; padding: 0 18px; border-bottom: 1px solid rgba(255,255,255,0.12); }
 .brand-mark { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; background: linear-gradient(135deg, #1e5eff, #0f766e); font-weight: 800; }
 .brand span { display: block; margin-top: 3px; font-size: 12px; color: rgba(255,255,255,0.72); }
-.side-menu { border-right: 0; background: transparent; }
+.side-menu { flex: 1; min-height: 0; overflow-y: auto; border-right: 0; background: transparent; }
+.side-menu::-webkit-scrollbar { width: 6px; }
+.side-menu::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.28); border-radius: 999px; }
 .side-menu :deep(.el-menu-item),
 .side-menu :deep(.el-sub-menu__title) { color: rgba(255,255,255,0.82); margin: 6px 10px; border-radius: 10px; }
 .side-menu :deep(.el-sub-menu__title:hover),
@@ -181,10 +184,10 @@ async function submitPasswordChange() {
 .side-menu :deep(.el-sub-menu .el-menu-item) { min-width: 0; margin-left: 18px; }
 .side-menu :deep(.el-menu) { background: transparent; }
 .menu-group-title { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; color: rgba(255,255,255,0.68); }
-.topbar { display: flex; align-items: center; justify-content: space-between; background: #fff; border-bottom: 1px solid var(--sw-border); }
+.topbar { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; background: #fff; border-bottom: 1px solid var(--sw-border); }
 .current-project { font-weight: 700; }
 .project-meta { margin-top: 4px; color: var(--sw-muted); font-size: 12px; }
 .top-actions { display: flex; align-items: center; gap: 14px; }
 .user-chip { cursor: pointer; padding: 8px 12px; border: 1px solid var(--sw-border); border-radius: 999px; }
-.content { padding: 20px; }
+.content { height: calc(100vh - 64px); padding: 20px; overflow: auto; }
 </style>

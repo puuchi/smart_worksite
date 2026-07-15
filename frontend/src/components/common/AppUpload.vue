@@ -78,6 +78,27 @@ function onRemove(_file: UploadFile, files: UploadFiles) {
   syncValidFiles(files);
 }
 
+function onExceed(files: File[]) {
+  const next = files[0];
+  if (!next) return;
+  
+  const message = validateFile(next);
+  if (message) {
+    ElMessage.error(message);
+    return;
+  }
+  const item = {
+    name: next.name,
+    size: next.size,
+    raw: next,
+    uid: Date.now(),
+    status: 'ready'
+  } as UploadUserFile;
+  fileList.value = [item];
+  emit('update:modelValue', [next]);
+  emit('change', [next]);
+}
+
 function syncValidFiles(files: UploadFiles) {
   const validItems: UploadUserFile[] = [];
   const validRawFiles: File[] = [];
@@ -110,7 +131,7 @@ watch(() => props.modelValue, (files) => {
 
 <template>
   <div>
-    <el-upload v-model:file-list="fileList" drag :multiple="multiple" :limit="multiple ? undefined : 1" :auto-upload="false" :accept="accept" :disabled="disabled || uploading" :before-upload="beforeUpload" @change="onChange" @remove="onRemove">
+    <el-upload v-model:file-list="fileList" drag :multiple="multiple" :limit="multiple ? undefined : 1" :auto-upload="false" :accept="accept" :disabled="disabled || uploading" :before-upload="beforeUpload" @change="onChange" @remove="onRemove" @exceed="onExceed">
       <div class="upload-icon">+</div>
       <div class="el-upload__text">拖拽文件到此处，或 <em>点击上传</em></div>
       <template #tip><div class="el-upload__tip">{{ displayTip }}，单文件不超过 {{ maxSizeMb }}MB</div></template>
