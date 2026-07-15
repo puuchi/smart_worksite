@@ -61,3 +61,8 @@ QWEN_VL_MAX_TOKENS=8192
 ```
 
 Supported OCR types are `ID_CARD`, `LICENSE_PLATE`, `INVOICE`, and `CUSTOM`. Contract extraction should use `CUSTOM` with field definitions such as party A, party B, contract amount, and payment terms. PDF inputs still require provider-supported file URLs or a future PDF-to-image preprocessing path.
+
+
+## Policy Crawler
+
+Policy/news HTML extraction is available at `POST /v1/policy/crawl`. Java sends the project ID, source ID, URL, and optional last crawl time. The Python service downloads public HTML, removes common page noise, extracts title, content, publish date, and policy number, then returns structured articles. It does not write Java databases, MinIO, or vector stores directly; Java owns persistence, external-call logs, and RAG indexing.

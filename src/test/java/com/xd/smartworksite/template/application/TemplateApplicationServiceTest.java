@@ -175,7 +175,7 @@ class TemplateApplicationServiceTest {
                 "file",
                 "report-template.md",
                 "text/markdown",
-                "项目：${ projectName }\n编号：${projectCode}\n重复：${projectName}".getBytes(StandardCharsets.UTF_8)
+                "项目：${ 项目名称 }\n编号：{{projectCode}}\n摘要：{{ 摘要 }}\n重复：${项目名称}".getBytes(StandardCharsets.UTF_8)
         );
         TemplateResponse uploaded = service.uploadTemplate(
                 1L,
@@ -190,7 +190,7 @@ class TemplateApplicationServiceTest {
 
         List<String> variables = service.listTemplateVariables(uploaded.getTemplateId());
 
-        assertThat(variables).containsExactly("projectName", "projectCode");
+        assertThat(variables).containsExactly("项目名称", "projectCode", "摘要");
     }
 
     @Test

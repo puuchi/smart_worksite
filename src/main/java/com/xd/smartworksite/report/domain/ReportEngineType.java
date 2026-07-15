@@ -1,5 +1,5 @@
 package com.xd.smartworksite.report.domain;
 
 public enum ReportEngineType {
-    CRYPTO_AGENT_V3
+    JAVA_TEMPLATE_AI
 }

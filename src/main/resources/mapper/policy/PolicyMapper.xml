@@ -1,0 +1,192 @@
+﻿<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xd.smartworksite.policy.mapper.PolicyMapper">
+    <resultMap id="SourceResultMap" type="com.xd.smartworksite.policy.domain.PolicySource">
+        <id property="id" column="id"/>
+        <result property="projectId" column="project_id"/>
+        <result property="name" column="name"/>
+        <result property="url" column="url"/>
+        <result property="urlHash" column="url_hash"/>
+        <result property="crawlFrequency" column="crawl_frequency"/>
+        <result property="status" column="status"/>
+        <result property="description" column="description"/>
+        <result property="lastCrawledAt" column="last_crawled_at"/>
+        <result property="lastError" column="last_error"/>
+        <result property="createdBy" column="created_by"/>
+        <result property="updatedBy" column="updated_by"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+    <resultMap id="ArticleResultMap" type="com.xd.smartworksite.policy.domain.PolicyArticle">
+        <id property="id" column="id"/>
+        <result property="projectId" column="project_id"/>
+        <result property="sourceId" column="source_id"/>
+        <result property="title" column="title"/>
+        <result property="url" column="url"/>
+        <result property="urlHash" column="url_hash"/>
+        <result property="summary" column="summary"/>
+        <result property="content" column="content"/>
+        <result property="publishDate" column="publish_date"/>
+        <result property="category" column="category"/>
+        <result property="policyNo" column="policy_no"/>
+        <result property="indexStatus" column="index_status"/>
+        <result property="errorMessage" column="error_message"/>
+        <result property="createdBy" column="created_by"/>
+        <result property="updatedBy" column="updated_by"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+    <resultMap id="CrawlTaskResultMap" type="com.xd.smartworksite.policy.domain.PolicyCrawlTask">
+        <id property="taskId" column="task_id"/>
+        <result property="projectId" column="project_id"/>
+        <result property="sourceId" column="source_id"/>
+        <result property="sourceName" column="source_name"/>
+        <result property="status" column="status"/>
+        <result property="progress" column="progress"/>
+        <result property="fetchedCount" column="fetched_count"/>
+        <result property="indexedCount" column="indexed_count"/>
+        <result property="failedCount" column="failed_count"/>
+        <result property="message" column="message"/>
+        <result property="errorMessage" column="error_message"/>
+        <result property="startedAt" column="started_at"/>
+        <result property="finishedAt" column="finished_at"/>
+        <result property="createdBy" column="created_by"/>
+        <result property="updatedBy" column="updated_by"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+    <sql id="SourceColumns">id, project_id, name, url, url_hash, crawl_frequency, status, description, last_crawled_at, last_error, created_by, updated_by, created_at, updated_at</sql>
+    <sql id="ArticleColumns">id, project_id, source_id, title, url, url_hash, summary, content, publish_date, category, policy_no, index_status, error_message, created_by, updated_by, created_at, updated_at</sql>
+    <sql id="CrawlTaskColumns">task_id, project_id, source_id, source_name, status, progress, fetched_count, indexed_count, failed_count, message, error_message, started_at, finished_at, created_by, updated_by, created_at, updated_at</sql>
+
+    <insert id="insertSource" useGeneratedKeys="true" keyProperty="id">
+        insert into policy_source (project_id, name, url, url_hash, crawl_frequency, status, description, created_by, updated_by)
+        values (#{projectId}, #{name}, #{url}, #{urlHash}, #{crawlFrequency}, #{status}, #{description}, #{createdBy}, #{updatedBy})
+    </insert>
+    <select id="selectSourceById" resultMap="SourceResultMap">
+        select <include refid="SourceColumns"/> from policy_source where id = #{sourceId} and deleted = 0
+    </select>
+    <select id="selectSourceByProjectAndHash" resultMap="SourceResultMap">
+        select <include refid="SourceColumns"/> from policy_source where project_id = #{projectId} and url_hash = #{urlHash} and deleted = 0 limit 1
+    </select>
+    <select id="selectSources" resultMap="SourceResultMap">
+        select <include refid="SourceColumns"/> from policy_source where deleted = 0
+        <if test="projectId != null">and project_id = #{projectId}</if>
+        <if test="projectId == null and accessibleProjectIds != null">and project_id in <foreach collection="accessibleProjectIds" item="pid" open="(" separator="," close=")">#{pid}</foreach></if>
+        <if test="keyword != null and keyword != ''">and (name like concat('%', #{keyword}, '%') or url like concat('%', #{keyword}, '%'))</if>
+        <if test="status != null and status != ''">and status = #{status}</if>
+        order by updated_at desc, id desc
+    </select>
+    <select id="selectEnabledSourcesByProject" resultMap="SourceResultMap">
+        select <include refid="SourceColumns"/> from policy_source where project_id = #{projectId} and status = 'ENABLED' and deleted = 0 order by id asc
+    </select>
+    <select id="selectDueSources" resultMap="SourceResultMap">
+        select <include refid="SourceColumns"/>
+        from policy_source
+        where status = 'ENABLED'
+          and deleted = 0
+          and crawl_frequency in ('DAILY', 'WEEKLY')
+          and (
+              (crawl_frequency = 'DAILY' and (last_crawled_at is null or last_crawled_at &lt; timestampadd(day, -1, current_timestamp)))
+              or
+              (crawl_frequency = 'WEEKLY' and (last_crawled_at is null or last_crawled_at &lt; timestampadd(day, -7, current_timestamp)))
+          )
+        order by last_crawled_at asc, id asc
+    </select>
+    <select id="countActiveCrawlTask" resultType="int">
+        select count(1)
+        from policy_crawl_task pct
+        join generate_task gt on gt.id = pct.task_id and gt.deleted = 0
+        where pct.source_id = #{sourceId}
+          and pct.deleted = 0
+          and gt.status in ('QUEUED', 'RUNNING', 'RETRYING')
+    </select>
+    <select id="countActiveProjectCrawlTask" resultType="int">
+        select count(1)
+        from policy_crawl_task pct
+        join generate_task gt on gt.id = pct.task_id and gt.deleted = 0
+        where pct.project_id = #{projectId}
+          and pct.source_id is null
+          and pct.deleted = 0
+          and gt.status in ('QUEUED', 'RUNNING', 'RETRYING')
+    </select>
+    <update id="updateSource">
+        update policy_source set name = #{name}, url = #{url}, url_hash = #{urlHash}, crawl_frequency = #{crawlFrequency}, description = #{description}, updated_by = #{updatedBy}
+        where id = #{id} and deleted = 0
+    </update>
+    <update id="softDeleteSource">
+        update policy_source set deleted = 1, updated_by = #{updatedBy} where id = #{sourceId} and deleted = 0
+    </update>
+    <update id="markSourceCrawled">
+        update policy_source set last_crawled_at = current_timestamp, last_error = #{lastError}, updated_by = #{updatedBy} where id = #{sourceId} and deleted = 0
+    </update>
+    <update id="markSourceFailed">
+        update policy_source set last_error = #{lastError}, updated_by = #{updatedBy} where id = #{sourceId} and deleted = 0
+    </update>
+
+    <insert id="insertCrawlTask">
+        insert into policy_crawl_task (task_id, project_id, source_id, source_name, status, progress, fetched_count, indexed_count, failed_count, message, created_by, updated_by)
+        values (#{taskId}, #{projectId}, #{sourceId}, #{sourceName}, #{status}, coalesce(#{progress}, 0), coalesce(#{fetchedCount}, 0), coalesce(#{indexedCount}, 0), coalesce(#{failedCount}, 0), #{message}, #{createdBy}, #{updatedBy})
+    </insert>
+    <select id="selectCrawlTaskByTaskId" resultMap="CrawlTaskResultMap">
+        select <include refid="CrawlTaskColumns"/> from policy_crawl_task where task_id = #{taskId} and deleted = 0
+    </select>
+    <select id="selectCrawlTasks" resultMap="CrawlTaskResultMap">
+        select <include refid="CrawlTaskColumns"/> from policy_crawl_task where deleted = 0
+        <if test="projectId != null">and project_id = #{projectId}</if>
+        <if test="projectId == null and accessibleProjectIds != null">and project_id in <foreach collection="accessibleProjectIds" item="pid" open="(" separator="," close=")">#{pid}</foreach></if>
+        <if test="sourceId != null">and source_id = #{sourceId}</if>
+        <if test="status != null and status != ''">and status = #{status}</if>
+        order by created_at desc, task_id desc
+    </select>
+    <update id="markCrawlTaskRunning">
+        update policy_crawl_task set status = 'RUNNING', progress = 10, started_at = current_timestamp, updated_by = #{updatedBy}
+        where task_id = #{taskId} and status in ('QUEUED', 'FAILED') and deleted = 0
+    </update>
+    <update id="markCrawlTaskFailed">
+        update policy_crawl_task set status = 'FAILED', progress = 100, error_message = #{errorMessage}, finished_at = current_timestamp, updated_by = #{updatedBy}
+        where task_id = #{taskId} and deleted = 0
+    </update>
+    <update id="updateCrawlTaskProgress">
+        update policy_crawl_task set status = #{status}, progress = #{progress}, fetched_count = #{fetchedCount}, indexed_count = #{indexedCount}, failed_count = #{failedCount}, message = #{message}, error_message = #{errorMessage},
+            finished_at = case when #{status} in ('SUCCESS','FAILED','CANCELED') then current_timestamp else finished_at end,
+            updated_by = #{updatedBy}
+        where task_id = #{taskId} and deleted = 0
+    </update>
+
+    <insert id="insertArticle" useGeneratedKeys="true" keyProperty="id">
+        insert into policy_article (project_id, source_id, title, url, url_hash, summary, content, publish_date, category, policy_no, index_status, error_message, created_by, updated_by)
+        values (#{projectId}, #{sourceId}, #{title}, #{url}, #{urlHash}, #{summary}, #{content}, #{publishDate}, #{category}, #{policyNo}, #{indexStatus}, #{errorMessage}, #{createdBy}, #{updatedBy})
+    </insert>
+    <update id="updateArticle">
+        update policy_article set source_id = #{sourceId}, title = #{title}, url = #{url}, summary = #{summary}, content = #{content}, publish_date = #{publishDate}, category = #{category}, policy_no = #{policyNo}, index_status = #{indexStatus}, error_message = #{errorMessage}, updated_by = #{updatedBy}
+        where id = #{id} and deleted = 0
+    </update>
+    <select id="selectArticleByProjectAndHash" resultMap="ArticleResultMap">
+        select <include refid="ArticleColumns"/> from policy_article where project_id = #{projectId} and url_hash = #{urlHash} and deleted = 0 limit 1
+    </select>
+    <select id="selectArticleById" resultMap="ArticleResultMap">
+        select <include refid="ArticleColumns"/> from policy_article where id = #{articleId} and deleted = 0
+    </select>
+    <select id="selectArticles" resultMap="ArticleResultMap">
+        select <include refid="ArticleColumns"/> from policy_article where deleted = 0
+        <if test="projectId != null">and project_id = #{projectId}</if>
+        <if test="projectId == null and accessibleProjectIds != null">and project_id in <foreach collection="accessibleProjectIds" item="pid" open="(" separator="," close=")">#{pid}</foreach></if>
+        <if test="sourceId != null">and source_id = #{sourceId}</if>
+        <if test="keyword != null and keyword != ''">and (title like concat('%', #{keyword}, '%') or summary like concat('%', #{keyword}, '%') or content like concat('%', #{keyword}, '%'))</if>
+        <if test="indexStatus != null and indexStatus != ''">and index_status = #{indexStatus}</if>
+        <if test="publishDateFrom != null">and publish_date &gt;= #{publishDateFrom}</if>
+        <if test="publishDateTo != null">and publish_date &lt;= #{publishDateTo}</if>
+        order by publish_date desc, updated_at desc, id desc
+    </select>
+    <update id="markArticleIndexing">
+        update policy_article set index_status = 'INDEXING', error_message = null, updated_by = #{updatedBy} where id = #{articleId} and deleted = 0
+    </update>
+    <update id="markArticleIndexSuccess">
+        update policy_article set index_status = 'SUCCESS', error_message = null, updated_by = #{updatedBy} where id = #{articleId} and deleted = 0
+    </update>
+    <update id="markArticleIndexFailed">
+        update policy_article set index_status = 'FAILED', error_message = #{errorMessage}, updated_by = #{updatedBy} where id = #{articleId} and deleted = 0
+    </update>
+</mapper>
+

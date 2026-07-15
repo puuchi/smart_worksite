@@ -25,7 +25,7 @@ const articles = ref<PolicyArticle[]>([]);
 const articlePager = reactive({ pageNo: 1, pageSize: 10, total: 0, keyword: '', sourceId: '' as ID | '', indexStatus: '' });
 const form = reactive({ sourceId: '' as ID | '', name: '', url: '', crawlFrequency: 'DAILY', description: '' });
 const projectId = computed(() => projectStore.currentProject?.projectId || '');
-
+const activeCrawlSourceIds = computed(() => new Set(tasks.value.filter((task) => ['QUEUED', 'RUNNING', 'RETRYING'].includes(String(task.status))).map((task) => task.sourceId || 'ALL')));
 
 function resetForm() {
   Object.assign(form, { sourceId: '', name: '', url: '', crawlFrequency: 'DAILY', description: '' });
@@ -139,6 +139,7 @@ async function removeSource(row: PolicySource) {
 
 async function crawl(sourceId?: ID) {
   if (!projectId.value) return ElMessage.warning('请先选择项目');
+  if (activeCrawlSourceIds.value.has(sourceId || 'ALL')) return ElMessage.warning('该政策源已有进行中的爬取任务');
   crawlingId.value = sourceId || 'ALL';
   try {
     await createPolicyCrawlTask({ projectId: projectId.value, sourceId });
@@ -149,6 +150,10 @@ async function crawl(sourceId?: ID) {
   } finally {
     crawlingId.value = '';
   }
+}
+
+function isCrawlingSource(sourceId: ID) {
+  return crawlingId.value === sourceId || activeCrawlSourceIds.value.has(sourceId);
 }
 
 function searchArticles() {
@@ -167,7 +172,7 @@ onMounted(refreshAll);
         <p class="page-desc">配置互联网政策资讯来源，模拟爬取任务和知识更新状态，支撑知识问答的政策来源演示。</p>
       </div>
       <div class="header-actions">
-        <el-button :icon="Refresh" :loading="crawlingId === 'ALL'" @click="crawl()">爬取全部</el-button>
+        <el-button :icon="Refresh" :loading="crawlingId === 'ALL'" :disabled="activeCrawlSourceIds.has('ALL')" @click="crawl()">爬取全部</el-button>
         <el-button type="primary" @click="openCreate">新增政策源</el-button>
       </div>
     </div>
@@ -181,7 +186,7 @@ onMounted(refreshAll);
           <template #status="{ row }"><StatusTag :status="row.status" /></template>
           <el-table-column label="操作" width="210">
             <template #default="{ row }">
-              <el-button link type="primary" :loading="crawlingId === row.sourceId" @click="crawl(row.sourceId)">爬取</el-button>
+              <el-button link type="primary" :loading="crawlingId === row.sourceId" :disabled="isCrawlingSource(row.sourceId)" @click="crawl(row.sourceId)">爬取</el-button>
               <el-button link @click="openEdit(row)">编辑</el-button>
               <el-button link type="danger" @click="removeSource(row)">删除</el-button>
             </template>

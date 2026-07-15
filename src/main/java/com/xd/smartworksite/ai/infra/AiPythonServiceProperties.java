@@ -42,6 +42,7 @@ public class AiPythonServiceProperties {
         private String databaseGenerateQuery = "/v1/database/generate-query";
         private String databaseSummarizeResult = "/v1/database/summarize-result";
         private String ocrRecognize = "/v1/ocr/recognize";
+        private String policyCrawl = "/v1/policy/crawl";
         public String getModelInvoke() { return modelInvoke; }
         public void setModelInvoke(String modelInvoke) { this.modelInvoke = modelInvoke; }
         public String getAgentInvoke() { return agentInvoke; }
@@ -60,6 +61,8 @@ public class AiPythonServiceProperties {
         public void setDatabaseSummarizeResult(String databaseSummarizeResult) { this.databaseSummarizeResult = databaseSummarizeResult; }
         public String getOcrRecognize() { return ocrRecognize; }
         public void setOcrRecognize(String ocrRecognize) { this.ocrRecognize = ocrRecognize; }
+        public String getPolicyCrawl() { return policyCrawl; }
+        public void setPolicyCrawl(String policyCrawl) { this.policyCrawl = policyCrawl; }
     }
 
     public static class Database {

@@ -181,3 +181,27 @@ class OcrRecognizeData(BaseModel):
     fields: list[OcrFieldData] = Field(default_factory=list)
     extras: dict[str, Any] = Field(default_factory=dict)
     raw: dict[str, Any] = Field(default_factory=dict)
+
+
+class PolicyCrawlRequest(BaseModel):
+    projectId: int
+    sourceId: int
+    url: str
+    lastCrawledAt: str | None = None
+
+
+class PolicyCrawlArticle(BaseModel):
+    title: str
+    url: str
+    summary: str = ""
+    content: str
+    publishDate: str | None = None
+    category: str | None = None
+    policyNo: str | None = None
+    sourceName: str | None = None
+
+
+class PolicyCrawlData(BaseModel):
+    fetchedCount: int = 0
+    message: str = ""
+    articles: list[PolicyCrawlArticle] = Field(default_factory=list)

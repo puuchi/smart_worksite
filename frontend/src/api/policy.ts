@@ -1,4 +1,5 @@
 import { mockPolicyArticles, mockPolicySources, mockPolicyTasks } from '../mocks/policy';
+import { request } from '../utils/request';
 import type { ID, PageQuery, PageResult, PolicyArticle, PolicyCrawlTask, PolicySource, PolicySourceForm } from './types';
 import { useModuleMock } from './mock';
 
@@ -22,13 +23,9 @@ function filterProject<T extends { projectId?: ID }>(records: T[], projectId?: I
   return projectId ? records.filter((item) => String(item.projectId) === String(projectId)) : records;
 }
 
-function requirePolicyMock(): never {
-  throw new Error('政策资讯后端接口尚未实现，请启用 VITE_USE_POLICY_MOCK=true 使用前端演示数据。');
-}
-
 export async function fetchPolicySources(params: PageQuery = {}) {
   if (useMock) return paginate(filterProject(sourceState, params.projectId), params);
-  return requirePolicyMock();
+  return request.get<PageResult<PolicySource>>('/policy/sources', { params });
 }
 
 export async function createPolicySource(data: PolicySourceForm & { projectId: ID }) {
@@ -38,7 +35,7 @@ export async function createPolicySource(data: PolicySourceForm & { projectId: I
     sourceState.unshift(created);
     return created;
   }
-  return requirePolicyMock();
+  return request.post<PolicySource>('/policy/sources', data);
 }
 
 export async function updatePolicySource(sourceId: ID, data: PolicySourceForm) {
@@ -48,7 +45,7 @@ export async function updatePolicySource(sourceId: ID, data: PolicySourceForm) {
     sourceState[index] = { ...sourceState[index], ...data, updatedAt: new Date().toISOString() };
     return sourceState[index];
   }
-  return requirePolicyMock();
+  return request.put<PolicySource>(`/policy/sources/${sourceId}`, data);
 }
 
 export async function deletePolicySource(sourceId: ID) {
@@ -57,7 +54,7 @@ export async function deletePolicySource(sourceId: ID) {
     if (index >= 0) sourceState.splice(index, 1);
     return null;
   }
-  return requirePolicyMock();
+  return request.delete<null>(`/policy/sources/${sourceId}`);
 }
 
 export async function createPolicyCrawlTask(data: { projectId: ID; sourceId?: ID }) {
@@ -85,7 +82,7 @@ export async function createPolicyCrawlTask(data: { projectId: ID; sourceId?: ID
     }
     return task;
   }
-  return requirePolicyMock();
+  return request.post<PolicyCrawlTask>('/policy/crawl-tasks', data);
 }
 
 export async function fetchPolicyCrawlTasks(params: PageQuery & { sourceId?: ID } = {}) {
@@ -93,7 +90,7 @@ export async function fetchPolicyCrawlTasks(params: PageQuery & { sourceId?: ID 
     const records = filterProject(taskState, params.projectId).filter((item) => !params.sourceId || String(item.sourceId) === String(params.sourceId));
     return paginate(records, params);
   }
-  return requirePolicyMock();
+  return request.get<PageResult<PolicyCrawlTask>>('/policy/crawl-tasks', { params });
 }
 
 export async function fetchPolicyArticles(params: PageQuery & { sourceId?: ID; indexStatus?: string } = {}) {
@@ -106,5 +103,5 @@ export async function fetchPolicyArticles(params: PageQuery & { sourceId?: ID; i
     });
     return paginate(records, params);
   }
-  return requirePolicyMock();
+  return request.get<PageResult<PolicyArticle>>('/policy/articles', { params });
 }

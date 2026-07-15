@@ -22,6 +22,8 @@ from app.models.schemas import (
     DatabaseSummarizeData,
     OcrRecognizeRequest,
     OcrRecognizeData,
+    PolicyCrawlRequest,
+    PolicyCrawlData,
 )
 from app.services.qwen_client import QwenClient
 from app.services.model_service import ModelService, AgentService
@@ -30,6 +32,7 @@ from app.services.route_context_service import RouteService, ContextService
 from app.services.database_service import DatabaseQaService
 from app.services.agent_tools import ToolRegistry, ToolSpec
 from app.services.ocr_service import OcrService
+from app.services.policy_crawler_service import PolicyCrawlerService
 
 router = APIRouter(prefix="/v1", dependencies=[Depends(verify_service_key)])
 
@@ -77,6 +80,7 @@ def services():
         "context": ContextService(qwen),
         "database": db,
         "ocr": OcrService(qwen),
+        "policy": PolicyCrawlerService(),
     }
 
 
@@ -136,4 +140,10 @@ async def database_summarize_result(request: DatabaseSummarizeRequest):
 @router.post("/ocr/recognize", response_model=StandardResponse[OcrRecognizeData])
 async def ocr_recognize(request: OcrRecognizeRequest):
     data, usage = await services()["ocr"].recognize(request)
+    return ok(data, usage)
+
+
+@router.post("/policy/crawl", response_model=StandardResponse[PolicyCrawlData])
+async def policy_crawl(request: PolicyCrawlRequest):
+    data, usage = await services()["policy"].crawl(request)
     return ok(data, usage)

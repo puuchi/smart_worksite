@@ -53,7 +53,7 @@ Python 智能算法服务属于整体架构的一部分，位于 `python-ai-serv
 | Embedding 向量化 | 文档切片向量化和语义检索 |
 | OCR 识别 | 身份证、车牌、发票、合同和自定义字段识别 |
 | 文档解析 | 内容抽取、版面理解、表格识别 |
-| CryptoAgentV3 | 当前报告生成集成的外部 Python 报告生成服务 |
+| 报告变量生成 | Python 模型根据模板变量和材料生成报告内容 |
 
 ### 数据与基础设施
 
@@ -74,7 +74,7 @@ Java + Spring Boot 后端主系统
         ↓ REST API
 Python 智能算法服务
         ↓
-大模型 / Agent / RAG / OCR / 文档解析 / CryptoAgentV3 / 向量化
+大模型 / Agent / RAG / OCR / 文档解析 / 报告变量生成 / 向量化
 ```
 
 - Java 后端负责统一鉴权、项目隔离、业务编排、状态记录、文件保存、下载 URL、审计追踪和外部调用日志。
@@ -95,13 +95,13 @@ Python 智能算法服务
 - 文件解析任务创建、记录查询、内容查询、重试和项目级访问校验。
 - 模板上传、列表、详情、修改、启用、停用、删除和项目级访问校验。
 - 报告模板和审查模板兼容接口。
-- 报告创建、列表、详情、重新生成、下载 URL、版本记录、项目级访问校验和异步 CryptoAgentV3 生成链路。
+- 报告创建、列表、详情、重新生成、下载 URL、版本记录、项目级访问校验和异步 Java DOCX 模板生成链路。
 - Java AI 适配层：模型调用、Agent 调用、RAG 检索/索引、数据库问答、路由、上下文准备、外部调用日志和项目级访问校验。
 - 知识库基础管理、文档上传、索引任务创建、任务 outbox 投递、Worker 异步调用 Python RAG 索引和失败状态记录。
 - 任务管理接口：任务列表、详情、阶段日志、状态统计、失败任务重试、等待/运行中任务取消请求和项目级访问校验。
 - 任务 outbox 基础投递：以 MySQL `task_outbox` 为事实源，按配置投递任务事件到 Redis 队列，并记录失败原因和重试时间。
 - 任务 Worker 基础状态机：领取 `QUEUED` 任务、写入 worker 租约和心跳、按 owner 校验完成成功或失败；执行业务前校验项目仍为可写状态；Redis 队列坏消息会记录原因和 payload 摘要后拒绝，不 claim 任务。
-- 报告创建、列表、详情、重新生成、下载 URL、版本记录和 CryptoAgentV3 集成。
+- 报告创建、列表、详情、重新生成、下载 URL、版本记录和 Java DOCX 模板生成集成。
 - OCR 识别后端接口：提交识别、列表、详情、重试、删除、字段修订、结果 JSON 查询和类型模板。
 - Java AI 适配层：模型调用、Agent 调用、RAG 检索/索引、数据库问答、路由、上下文准备和外部调用日志。
 - Python 智能算法服务：新增 `/v1/ocr/recognize`，封装 Qwen VL 完成身份证、车牌、发票和自定义字段 OCR 抽取。
@@ -155,7 +155,7 @@ com.xd.smartworksite
   project                 项目管理
   file                    文件管理和文件解析
   template                模板管理
-  report                  报告生成和 CryptoAgentV3 集成
+  report                  报告生成、DOCX模板渲染和Python模型变量生成集成
   knowledge               知识库基础管理、文档生命周期和异步 RAG 索引任务
   datasource              数据源基础管理和数据库问答支撑
   qa                      Knowledge QA sessions, messages, references, feedback, and AI routing loop
@@ -320,11 +320,11 @@ JWT 鉴权会回查当前用户状态；用户被停用或删除后，旧 token 
 | POST | `/api/templates/review` | 上传审查模板 |
 | POST | `/api/report/templates` | 上传报告模板兼容接口 |
 | GET | `/api/report/templates` | 查询报告模板列表 |
-| GET | `/api/report/templates/{templateId}/variables` | 查询报告模板变量；后端会读取已上传模板文件并解析 `${变量名}` 占位符，不支持或读取失败时直接返回错误 |
+| GET | `/api/report/templates/{templateId}/variables` | 查询报告模板变量；后端会读取已上传模板文件并解析 `${变量名}` 和 `{{变量名}}` 占位符，不支持或读取失败时直接返回错误 |
 | POST | `/api/review/templates` | 上传审查模板兼容接口 |
 | GET | `/api/review/templates` | 查询审查模板列表 |
 
-报告模板变量解析规则：变量接口必须读取模板文件真实内容，当前支持 DOCX、TXT、MD 中的 `${变量名}` 占位符；模板文件缺失、跨项目不一致、文件为空、格式不支持或对象存储读取失败时直接返回错误，不允许返回假空列表。
+报告模板变量解析规则：变量接口必须读取模板文件真实内容，当前支持 DOCX、TXT、MD 中的 `${变量名}` 和 `{{变量名}}` 占位符；模板文件缺失、跨项目不一致、文件为空、格式不支持或对象存储读取失败时直接返回错误，不允许返回假空列表。
 
 模板写入规则：模板上传创建后必须读回持久化记录再返回成功；模板修改、启用、停用和删除必须检查数据库影响行数，记录不存在或状态已变化时直接返回冲突错误，不允许静默成功。
 
@@ -332,7 +332,7 @@ JWT 鉴权会回查当前用户状态；用户被停用或删除后，旧 token 
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| POST | `/api/reports` | 创建报告生成任务，`reportName`、`reportType`、`templateId` 必填，返回 `PENDING` 和 `taskId`，由任务 outbox/Worker 异步调用 CryptoAgentV3 |
+| POST | `/api/reports` | 创建报告生成任务，`reportName`、`reportType`、`templateId` 必填，返回 `PENDING` 和 `taskId`，由任务 outbox/Worker 异步执行 Java DOCX 模板渲染并调用 Python 生成缺失变量 |
 | GET | `/api/reports` | 分页查询报告列表 |
 | GET | `/api/reports/{reportId}` | 查询报告详情 |
 | POST | `/api/reports/{reportId}/regenerate` | 重新生成报告 |
@@ -449,71 +449,11 @@ Review read APIs require `review:view`; submit/retry/delete/archive/update-issue
 | GET | `/api/audit/logs` | Query operation audit logs |
 | GET | `/api/audit/external-call-logs` | Query external service call logs |
 
-### Java AI 适配层
+### 报告生成
 
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| POST | `/api/ai/model/invoke` | 调用 Python 模型能力 |
-| POST | `/api/ai/agent/invoke` | 调用 Python Agent 能力 |
-| POST | `/api/ai/knowledge/search` | RAG 检索 |
-| POST | `/api/ai/knowledge/index` | RAG 索引 |
-| POST | `/api/ai/database/query` | 数据库问答，只执行安全只读 SQL |
-| POST | `/api/ai/route` | 智能路由 |
-| POST | `/api/ai/context/prepare` | 上下文准备 |
-| GET | `/api/ai/external-call-logs` | 查询外部 AI 调用日志 |
+报告创建接口不直接阻塞生成文件。开启任务 outbox 调度和 Worker 后，Worker 会领取 `REPORT_GENERATION` 任务，确认项目仍为 `ENABLED` 后读取 DOCX 模板和参考材料，调用 Python 模型补全缺失模板变量，并在 Java 中渲染 Word 文件。
 
-## 数据库迁移
-
-Flyway 脚本位于：
-
-```text
-src/main/resources/db/migration
-```
-
-当前脚本：
-
-| 脚本 | 说明 |
-| --- | --- |
-| `V1__init_schema.sql` | 初始化用户、角色、项目、文件、知识库、数据源、任务、审计、系统配置等基础表 |
-| `V2__extend_file_object.sql` | 扩展文件对象字段 |
-| `V3__template_report_schema.sql` | 新增模板、报告配置、报告主表和报告版本表 |
-| `V4__create_file_parse_record.sql` | 新增文件解析记录表 |
-| `V5__align_report_status_with_api_doc.sql` | 对齐报告状态枚举 |
-| `V6__add_missing_foundation_tables.sql` | 补充问答、审查、OCR 基础表 |
-| `V7__add_business_permissions.sql` | 新增前端路由和业务菜单权限 |
-| `V8__reset_default_admin_password.sql` | 重置本地默认管理员密码为 `admin123` |
-| `V9__align_task_and_parse_status_contracts.sql` | 对齐任务、报告和文件解析状态枚举 |
-| `V10__extend_generate_task_runtime_fields.sql` | 扩展任务运行时字段、阶段日志尝试次数和任务 outbox 表 |
-| `V11__add_knowledge_and_datasource_manage_permissions.sql` | 新增知识库和数据源管理权限 |
-| `V12__add_qa_manage_permission_and_indexes.sql` | 新增问答管理权限和问答查询索引 |
-| `V13__add_review_manage_permission.sql` | 新增合规审查管理权限 |
-| `V14__extend_knowledge_document_index_task.sql` | 扩展知识库文档索引任务ID和失败原因字段 |
-
-数据库结构变更必须新增 Flyway 脚本，不要修改已经合入并被团队使用的旧脚本。
-
-## 外部服务配置
-
-### Qwen-VL OCR / 文档解析
-
-```env
-QWEN_VL_ENDPOINT=https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
-QWEN_VL_API_KEY=
-QWEN_VL_MODEL=qwen-vl-plus
-QWEN_VL_MAX_TOKENS=8192
-```
-
-OCR 识别由 `python-ai-service` 封装 Qwen VL，Java 后端只调用 Python OCR API，不直接调用 `QWEN_VL_ENDPOINT`。图片 OCR 会在 Python 侧下载 Java 生成的临时文件 URL，并转为 `data:image/...;base64,...` 后发送给 Qwen VL，避免把本地或内网 MinIO 临时签名 URL 直接转发给云端模型服务。
-
-### CryptoAgentV3 报告生成
-
-报告创建接口不直接阻塞调用 CryptoAgentV3。开启任务 outbox 调度和 Worker 后，Worker 会领取 `REPORT_GENERATION` 任务，确认项目仍为 `ENABLED` 后再调用外部服务；本地测试可使用 fake client，不依赖真实 CryptoAgent 服务。
-
-```env
-CRYPTO_AGENT_V3_BASE_URL=http://127.0.0.1:8012
-CRYPTO_AGENT_V3_INVOKE_PATH=/v1/report-generation/invoke
-CRYPTO_AGENT_V3_CONNECT_TIMEOUT_SECONDS=5
-CRYPTO_AGENT_V3_READ_TIMEOUT_SECONDS=3000000
-```
+模板占位符支持 `${变量名}` 和 `{{变量名}}`；文本材料可直接读取，Word/PDF/图片等非文本材料必须先有成功的文件解析结果。
 
 ### Python AI Service
 

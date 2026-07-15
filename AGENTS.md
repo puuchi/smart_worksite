@@ -49,7 +49,7 @@ Python intelligent algorithm service:
 - Embedding vectorization for document chunks and semantic retrieval
 - OCR recognition for ID cards, license plates, invoices, contracts, and custom fields
 - Document parsing for content extraction, layout understanding, and table recognition
-- CryptoAgentV3 as the current external Python report-generation integration
+- Java DOCX template rendering with Python model-based variable generation as the current report-generation integration
 
 Data and infrastructure:
 
@@ -97,8 +97,9 @@ Main modules:
 - `datasource`: business data source configuration, project isolation, encrypted password metadata, and database Q&A foundations.
 - `qa`: Q&A sessions, messages, answer references, feedback, project isolation, and model/RAG/database QA integration through the AI adapter.
 - `review`: compliance templates, review records, AI Agent review execution, issue lists, suggestions, issue handling status, and JSON results.
-- `report`: report templates, records, versions, downloads, and CryptoAgentV3 integration.
+- `report`: report templates, records, versions, downloads, DOCX rendering, and Python model variable generation.
 - `ocr`: OCR records, recognition types, structured fields, and result JSON.
+- `policy`: policy/news source configuration, crawl task orchestration, crawled article persistence, and RAG indexing through the AI adapter.
 - `task`: async task query, status statistics, retries, cancellation requests, runtime leases, outbox foundation, and stage logs.
 - `audit`: operation audit log persistence/query APIs, project operation tracing, access logs, model calls, retrieval logs, OCR calls, and external call logs.
 - `ai`: Java intelligent capability adapter for Python AI services, including model/Agent calls, RAG search, routing, context preparation, safe database Q&A, and external call logs.
@@ -179,10 +180,11 @@ Request IDs are handled by `common.config.RequestIdFilter`. The response header 
 - File uploads must require a non-blank original filename; do not silently replace missing filenames with generic names such as `file`.
 - File upload and parse-task creation must read back persisted records before returning success; if records are not readable, fail visibly and clean up uploaded storage objects where applicable.
 - AI, RAG, OCR, Embedding, vector retrieval, and document-parsing integrations must be adapter-based; do not implement algorithm core logic in Java controllers or application services.
+- Policy/news crawling must be orchestrated by Java and executed through `python-ai-service`; Java persists sources, tasks, articles, external-call logs, and RAG index state, while frontend never crawls external websites or calls Python directly.
 - Long-running operations such as report generation, OCR recognition, knowledge indexing, and document parsing must use async tasks or status records instead of blocking HTTP requests for the whole job. Task status values are `PENDING`, `QUEUED`, `RUNNING`, `SUCCESS`, `FAILED`, `RETRYING`, and `CANCELED`.
 - Async workers such as OCR recognition must not depend on request-thread `SecurityContext`; they must re-check the target project through system-safe project/file access methods before reading files or calling external services.
-- Report creation APIs must return the created report in `PENDING` state and create a `QUEUED` task after writing `task_outbox`; actual CryptoAgentV3 execution belongs to the worker path and must re-check project writability before calling the external service. If CryptoAgentV3 is unavailable, tests may use fake clients, but production code must fail visibly and record task/report errors instead of falling back silently.
-- Report creation requires explicit `reportName`; do not derive a default report name from `reportType`. CryptoAgentV3 generated DOCX payloads must include a non-blank filename; blank filenames must fail the task visibly instead of creating fallback file names.
+- Report creation APIs must return the created report in `PENDING` state and create a `QUEUED` task after writing `task_outbox`; actual DOCX template rendering belongs to the worker path and must re-check project writability before reading materials or calling Python AI. If Python AI, templates, materials, or storage are unavailable, production code must fail visibly and record task/report errors instead of falling back silently.
+- Report creation requires explicit `reportName`; do not derive a default report name from `reportType`. Generated DOCX files must be persisted through MinIO and file metadata; persistence failures must fail the task visibly instead of creating fallback success records.
 - Task retry and cancel APIs must fail fast on stale or invalid states. Retrying is allowed only for `FAILED` tasks within the retry limit. Canceling terminal tasks must return a conflict instead of silently succeeding. Running tasks record `cancel_requested=true` and must be stopped by the worker cooperatively.
 - Task stage logs and task outbox events must check insert affected rows and generated IDs where applicable. State transitions must not be reported as successful if their trace or durable outbox record cannot be persisted.
 - Authentication and authorization management writes must check affected rows for user updates, password changes, role changes, role-permission links, project member changes, and last-login updates. Missing write effects must fail with conflict instead of silent success.
@@ -267,6 +269,7 @@ Request IDs are handled by `common.config.RequestIdFilter`. The response header 
 - The Python intelligent algorithm service lives under `python-ai-service/`.
 - Qwen API keys must stay in the Python service `.env` or environment variables and must not be written to Java config, docs, SQL, or logs.
 - Java backend calls Python through `app.ai.python-service.*` and sends `X-AI-Service-Key` when configured.
+- Policy/news crawler extraction is exposed by `python-ai-service` at `/v1/policy/crawl`; Python only downloads and extracts public HTML content and must not write Java databases, MinIO, or vector stores directly.
 - OCR recognition may use Qwen VL, but Qwen VL must be wrapped by `python-ai-service`; Java OCR modules must call the Python OCR API instead of calling `QWEN_VL_ENDPOINT` directly.
 - For image OCR, Python should download Java-generated temporary MinIO URLs and send Qwen VL `data:image/...;base64,...` image URLs instead of forwarding signed MinIO URLs to the cloud provider.
 - Database Q&A uses Python to generate SQL and summaries, but Java must validate and execute only safe MySQL read-only SQL.

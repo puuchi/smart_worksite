@@ -7,6 +7,7 @@ import com.xd.smartworksite.common.redis.RedisKeys;
 import com.xd.smartworksite.common.redis.RedisQueueService;
 import com.xd.smartworksite.common.result.ErrorCode;
 import com.xd.smartworksite.knowledge.application.KnowledgeBaseApplicationService;
+import com.xd.smartworksite.policy.application.PolicyApplicationService;
 import com.xd.smartworksite.report.application.ReportGenerationApplicationService;
 import com.xd.smartworksite.task.application.TaskOutboxApplicationService;
 import com.xd.smartworksite.task.application.TaskWorkerApplicationService;
@@ -27,6 +28,7 @@ import java.time.Duration;
 public class TaskQueueWorker {
     private static final String TASK_TYPE_REPORT_GENERATION = "REPORT_GENERATION";
     private static final String TASK_TYPE_KNOWLEDGE_INDEXING = "KNOWLEDGE_INDEXING";
+    private static final String TASK_TYPE_POLICY_CRAWL = "POLICY_CRAWL";
     private static final String STAGE_FINISH = "FINISH";
     private static final Logger log = LoggerFactory.getLogger(TaskQueueWorker.class);
 
@@ -34,6 +36,7 @@ public class TaskQueueWorker {
     private final TaskWorkerApplicationService taskWorkerApplicationService;
     private final ReportGenerationApplicationService reportGenerationApplicationService;
     private final KnowledgeBaseApplicationService knowledgeBaseApplicationService;
+    private final PolicyApplicationService policyApplicationService;
     private final TaskWorkerProperties properties;
     private final ObjectMapper objectMapper;
 
@@ -43,10 +46,22 @@ public class TaskQueueWorker {
                            KnowledgeBaseApplicationService knowledgeBaseApplicationService,
                            TaskWorkerProperties properties,
                            ObjectMapper objectMapper) {
+        this(redisQueueService, taskWorkerApplicationService, reportGenerationApplicationService,
+                knowledgeBaseApplicationService, null, properties, objectMapper);
+    }
+
+    public TaskQueueWorker(RedisQueueService redisQueueService,
+                           TaskWorkerApplicationService taskWorkerApplicationService,
+                           ReportGenerationApplicationService reportGenerationApplicationService,
+                           KnowledgeBaseApplicationService knowledgeBaseApplicationService,
+                           PolicyApplicationService policyApplicationService,
+                           TaskWorkerProperties properties,
+                           ObjectMapper objectMapper) {
         this.redisQueueService = redisQueueService;
         this.taskWorkerApplicationService = taskWorkerApplicationService;
         this.reportGenerationApplicationService = reportGenerationApplicationService;
         this.knowledgeBaseApplicationService = knowledgeBaseApplicationService;
+        this.policyApplicationService = policyApplicationService;
         this.properties = properties;
         this.objectMapper = objectMapper;
     }
@@ -92,6 +107,13 @@ public class TaskQueueWorker {
         }
         if (TASK_TYPE_KNOWLEDGE_INDEXING.equals(claim.getTask().getTaskType())) {
             knowledgeBaseApplicationService.executeIndexTask(claim.getTask().getBizId(), message.getTaskId());
+            return;
+        }
+        if (TASK_TYPE_POLICY_CRAWL.equals(claim.getTask().getTaskType())) {
+            if (policyApplicationService == null) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "policy crawl service is not configured");
+            }
+            policyApplicationService.executeCrawlTask(message.getTaskId());
             return;
         }
         throw new BusinessException(ErrorCode.PARAM_ERROR, "unsupported task type: " + claim.getTask().getTaskType());

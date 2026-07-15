@@ -43,7 +43,7 @@ import java.util.regex.Pattern;
 public class TemplateApplicationService {
 
     private static final String FILE_STATUS_ACTIVE = "ACTIVE";
-    private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\$\\{\\s*([A-Za-z0-9_.-]+)\\s*}");
+    private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\$\\{\\s*([^}]+?)\\s*}|\\{\\{\\s*([^}]+?)\\s*}}");
 
     private final TemplateRepository templateRepository;
     private final ProjectAccessApplicationService projectAccessApplicationService;
@@ -367,7 +367,10 @@ public class TemplateApplicationService {
         Set<String> variables = new LinkedHashSet<>();
         Matcher matcher = VARIABLE_PATTERN.matcher(text);
         while (matcher.find()) {
-            variables.add(matcher.group(1));
+            String value = matcher.group(1) == null ? matcher.group(2) : matcher.group(1);
+            if (value != null && !value.isBlank()) {
+                variables.add(value.trim());
+            }
         }
         return new ArrayList<>(variables);
     }
