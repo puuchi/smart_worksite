@@ -15,6 +15,7 @@ import com.xd.smartworksite.task.dto.TaskClaimResult;
 import com.xd.smartworksite.task.dto.TaskQueueMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -50,6 +51,7 @@ public class TaskQueueWorker {
                 knowledgeBaseApplicationService, null, properties, objectMapper);
     }
 
+    @Autowired
     public TaskQueueWorker(RedisQueueService redisQueueService,
                            TaskWorkerApplicationService taskWorkerApplicationService,
                            ReportGenerationApplicationService reportGenerationApplicationService,

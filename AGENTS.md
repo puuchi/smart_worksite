@@ -138,6 +138,7 @@ Business modules may use these layers as needed: `controller`, `application`, `d
 - QA frontend answers should render readable Markdown-style structure after escaping content, and question submission must show an in-progress answer placeholder while the backend is generating.
 - QA frontend in-progress question editing should be handled by withdrawing the local pending message and ignoring stale responses; do not pretend a backend request was canceled unless cancellation is actually supported.
 - QA frontend answer-format parsing should stay in a dedicated utility instead of growing the page component; unsafe or non-standard model text must be escaped first and degraded to readable paragraphs when structure cannot be parsed reliably.
+- QA frontend message send and answer regeneration calls use a dedicated 120-second timeout; ordinary QA CRUD and query calls keep the shared 15-second timeout.
 - Review APIs must call the AI adapter/Python Agent for compliance results. Do not create fake issue lists, default pass results, or silent success when the Agent returns empty, invalid, or failed results. Persist failed review records with observable error details.
 - Review execution failure handling must check failed-state persistence; if a failed review record cannot be marked `FAILED` with error details, return a conflict instead of losing observability.
 - Review submit APIs must read back the inserted review record before calling the Agent; missing generated IDs or unreadable records must fail before external AI execution.
@@ -191,6 +192,7 @@ Request IDs are handled by `common.config.RequestIdFilter`. The response header 
 - P0 create/update paths must check affected rows or generated IDs for project records and creator members, file objects and parse records, template files/templates and file business-ID binding, report configs/reports/tasks/output files/versions, and review records. APIs that return persisted data must read back the row before success.
 - Task queue delivery must use MySQL `task_outbox` as the durable source of truth. Redis is a delivery channel only; delivery failures must record error details, retry counters, and the next delivery time instead of being swallowed.
 - Task workers must claim `QUEUED` tasks before execution, verify the target project is still writable, write `worker_id`, `lease_until`, and heartbeat timestamps, and complete tasks with owner checks. Stale, canceled, or non-owner completions must fail fast with conflict. Invalid Redis queue messages must be rejected with observable logs before claiming tasks.
+- Conditional background components with multiple constructors must explicitly identify the Spring injection constructor so enabling the component cannot fail due to ambiguous constructor selection.
 - Login failure counters and temporary account locks must use Redis keys under `RedisKeys`; corrupted counters must fail fast instead of being silently reset.
 - JWT authentication must re-check the current user record on each request; disabled or deleted users must not be authenticated by stale tokens.
 - Logs must not print passwords, tokens, MinIO secrets, or production credentials.

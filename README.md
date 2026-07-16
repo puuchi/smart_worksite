@@ -355,12 +355,14 @@ P0 write confirmation addendum: project creates/updates/status/settings, file-ob
 | POST | `/api/tasks/{taskId}/retry` | 重试失败且未超过重试次数的任务 |
 | POST | `/api/tasks/{taskId}/cancel` | 取消等待中的任务，或对运行中任务写入取消请求 |
 
-任务 outbox 调度默认关闭，避免本地未启动 Redis 时影响后端启动。需要投递 Redis 队列时设置：
+任务 outbox 调度和 Worker 默认关闭，避免本地未启动 Redis 时影响后端启动。需要投递并消费 Redis 异步任务时同时设置：
 
 ```properties
 TASK_OUTBOX_DISPATCHER_ENABLED=true
 TASK_OUTBOX_DISPATCHER_BATCH_SIZE=20
 TASK_OUTBOX_DISPATCHER_FIXED_DELAY_MS=5000
+TASK_WORKER_ENABLED=true
+TASK_WORKER_ID=smart-worksite-worker
 ```
 
 Task write rule: task state transitions, stage logs, and task outbox events must confirm affected rows or generated IDs. Retry/cancel/worker/outbox operations fail with conflict when status records, stage traces, or durable outbox failure states cannot be persisted.
