@@ -4,6 +4,7 @@ import type { ID, PageResult, QaMessage, QaReference, QaSession } from './types'
 import { useModuleMock } from './mock';
 
 const useMock = useModuleMock('VITE_USE_QA_MOCK', false);
+const QA_GENERATION_TIMEOUT_MS = 120_000;
 const mockSessions = [...mockQaSessions];
 const mockMessages: QaMessageWithExtra[] = [...mockQaMessages];
 const feedbackState: Record<string, boolean> = {};
@@ -90,7 +91,9 @@ export async function sendQuestion(sessionId: ID, data: { question: string; rout
     mockMessages.push(answer);
     return answer;
   }
-  return request.post<QaMessage>(`/qa/sessions/${sessionId}/messages`, data);
+  return request.post<QaMessage>(`/qa/sessions/${sessionId}/messages`, data, {
+    timeout: QA_GENERATION_TIMEOUT_MS
+  });
 }
 
 export async function submitFeedback(messageId: ID, useful: boolean) {
@@ -106,7 +109,9 @@ export async function regenerateMessage(sessionId: ID, messageId: ID) {
     mockMessages.push(answer);
     return answer;
   }
-  return request.post<QaMessage>(`/qa/sessions/${sessionId}/messages/${messageId}/regenerate`);
+  return request.post<QaMessage>(`/qa/sessions/${sessionId}/messages/${messageId}/regenerate`, undefined, {
+    timeout: QA_GENERATION_TIMEOUT_MS
+  });
 }
 
 export async function fetchQaMessageDetail(messageId: ID) {

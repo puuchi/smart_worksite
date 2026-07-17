@@ -3,16 +3,22 @@ package com.xd.smartworksite.task.infra;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xd.smartworksite.common.redis.RedisQueueService;
 import com.xd.smartworksite.knowledge.application.KnowledgeBaseApplicationService;
+import com.xd.smartworksite.policy.application.PolicyApplicationService;
 import com.xd.smartworksite.report.application.ReportGenerationApplicationService;
 import com.xd.smartworksite.task.application.TaskWorkerApplicationService;
 import com.xd.smartworksite.task.domain.GenerateTask;
 import com.xd.smartworksite.task.dto.TaskClaimResult;
 import com.xd.smartworksite.task.dto.TaskQueueMessage;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.util.TestPropertyValues;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -24,6 +30,27 @@ import static org.mockito.Mockito.when;
 class TaskQueueWorkerTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Test
+    void springCanCreateWorkerWhenWorkerIsEnabled() {
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            TestPropertyValues.of("app.task.worker.enabled=true").applyTo(context);
+            PolicyApplicationService policyApplicationService = mock(PolicyApplicationService.class);
+            context.registerBean(RedisQueueService.class, () -> mock(RedisQueueService.class));
+            context.registerBean(TaskWorkerApplicationService.class, () -> mock(TaskWorkerApplicationService.class));
+            context.registerBean(ReportGenerationApplicationService.class, () -> mock(ReportGenerationApplicationService.class));
+            context.registerBean(KnowledgeBaseApplicationService.class, () -> mock(KnowledgeBaseApplicationService.class));
+            context.registerBean(PolicyApplicationService.class, () -> policyApplicationService);
+            context.registerBean(ObjectMapper.class, () -> new ObjectMapper());
+            context.registerBean(TaskQueueWorker.class);
+
+            context.refresh();
+
+            TaskQueueWorker worker = context.getBean(TaskQueueWorker.class);
+            assertNotNull(worker);
+            assertSame(policyApplicationService, ReflectionTestUtils.getField(worker, "policyApplicationService"));
+        }
+    }
 
     @Test
     void reportGenerationMessageExecutesReportAndCompletesTask() throws Exception {

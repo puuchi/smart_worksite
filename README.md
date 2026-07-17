@@ -94,8 +94,9 @@ Python 智能算法服务
 - 文件上传、列表、详情、访问 URL、删除和项目级访问校验。
 - 文件解析任务创建、记录查询、内容查询、重试和项目级访问校验。
 - 模板上传、列表、详情、修改、启用、停用、删除和项目级访问校验。
+- 报告模板上传前自动扫描并持久化 `{{ var_xx_xx }}` 变量、模板文件流预览、变量顺序查询，以及按模板文件新增或修改全部变量描述；审查模板上传不执行变量自动解析。
 - 报告模板和审查模板兼容接口。
-- 报告创建、列表、详情、重新生成、下载 URL、版本记录、项目级访问校验和异步 Java DOCX 模板生成链路。
+- 报告创建、列表、详情、逐变量状态查询、重新生成、下载 URL、版本记录、单知识库逐变量 QA/RAG 生成和异步 Java DOCX 模板渲染链路。
 - Java AI 适配层：模型调用、Agent 调用、RAG 检索/索引、数据库问答、路由、上下文准备、外部调用日志和项目级访问校验。
 - 知识库基础管理、文档上传、索引任务创建、任务 outbox 投递、Worker 异步调用 Python RAG 索引和失败状态记录。
 - 任务管理接口：任务列表、详情、阶段日志、状态统计、失败任务重试、等待/运行中任务取消请求和项目级访问校验。
@@ -155,7 +156,7 @@ com.xd.smartworksite
   project                 项目管理
   file                    文件管理和文件解析
   template                模板管理
-  report                  报告生成、DOCX模板渲染和Python模型变量生成集成
+  report                  报告生成、变量值持久化、知识库逐变量生成和DOCX模板渲染
   knowledge               知识库基础管理、文档生命周期和异步 RAG 索引任务
   datasource              数据源基础管理和数据库问答支撑
   qa                      Knowledge QA sessions, messages, references, feedback, and AI routing loop
@@ -316,29 +317,34 @@ JWT 鉴权会回查当前用户状态；用户被停用或删除后，旧 token 
 | POST | `/api/templates/{templateId}/enable` | 启用模板 |
 | POST | `/api/templates/{templateId}/disable` | 停用模板 |
 | DELETE | `/api/templates/{templateId}` | 删除模板 |
+| GET | `/api/templates/{templateId}/preview` | 通过 Java 后端获取模板预览文件流，不暴露 MinIO 地址 |
+| GET | `/api/templates/{templateId}/variables` | 扫描 DOC、DOCX、XLS、XLSX、CSV、TXT、MD 中的 `{{ var_xx_xx }}` 变量并按首次出现顺序去重 |
+| GET | `/api/templates/{templateId}/variables/descriptions` | 按模板变量顺序查询变量名和已有描述，未配置描述返回空字符串 |
+| PUT | `/api/templates/{templateId}/variables/descriptions` | 对当前模板文件的全部变量描述执行新增或修改 |
 | POST | `/api/templates/report` | 上传报告模板 |
 | POST | `/api/templates/review` | 上传审查模板 |
 | POST | `/api/report/templates` | 上传报告模板兼容接口 |
 | GET | `/api/report/templates` | 查询报告模板列表 |
-| GET | `/api/report/templates/{templateId}/variables` | 查询报告模板变量；后端会读取已上传模板文件并解析 `${变量名}` 和 `{{变量名}}` 占位符，不支持或读取失败时直接返回错误 |
+| GET | `/api/report/templates/{templateId}/variables` | 报告模板变量兼容接口，委托统一 `{{ var_xx_xx }}` 解析能力 |
 | POST | `/api/review/templates` | 上传审查模板兼容接口 |
 | GET | `/api/review/templates` | 查询审查模板列表 |
 
-报告模板变量解析规则：变量接口必须读取模板文件真实内容，当前支持 DOCX、TXT、MD 中的 `${变量名}` 和 `{{变量名}}` 占位符；模板文件缺失、跨项目不一致、文件为空、格式不支持或对象存储读取失败时直接返回错误，不允许返回假空列表。
+模板变量解析规则：变量接口必须读取模板文件真实内容，只识别 `{{ var_xx_xx }}` 占位符，当前支持 DOC、DOCX、XLS、XLSX、CSV、TXT、MD，不支持 PDF；合法模板没有变量时返回空列表，模板文件缺失、跨项目不一致、格式损坏、格式不支持或对象存储读取失败时直接返回错误，不允许用空列表隐藏解析失败。
 
-模板写入规则：模板上传创建后必须读回持久化记录再返回成功；模板修改、启用、停用和删除必须检查数据库影响行数，记录不存在或状态已变化时直接返回冲突错误，不允许静默成功。
+模板写入规则：报告模板上传在写入 MinIO 前自动扫描真实文件变量，并在文件、模板记录生成 ID 后将变量以空描述写入 `template_variable_description`；解析或变量持久化失败时上传失败，数据库写入回滚并清理本次 MinIO 对象。审查模板不执行自动变量解析。模板上传创建后必须读回持久化记录再返回成功；模板修改、启用、停用和删除必须检查数据库影响行数，记录不存在或状态已变化时直接返回冲突错误，不允许静默成功。
 
 ### 报告
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| POST | `/api/reports` | 创建报告生成任务，`reportName`、`reportType`、`templateId` 必填，返回 `PENDING` 和 `taskId`，由任务 outbox/Worker 异步执行 Java DOCX 模板渲染并调用 Python 生成缺失变量 |
+| POST | `/api/reports` | 使用一个已启用知识库创建报告生成任务，`reportName`、`reportType`、`templateId`、`knowledgeBaseId` 必填，返回 `PENDING` 和 `taskId` |
 | GET | `/api/reports` | 分页查询报告列表 |
 | GET | `/api/reports/{reportId}` | 查询报告详情 |
+| GET | `/api/reports/{reportId}/variables` | 按模板顺序查询变量描述、生成值、状态和错误 |
 | POST | `/api/reports/{reportId}/regenerate` | 重新生成报告 |
 | GET | `/api/reports/{reportId}/download?format=WORD` | 获取 Word 报告下载 URL |
 
-报告生成引用文件规则：`referenceFileIds` 中的文件必须存在且属于当前报告项目；跨项目文件引用会返回权限错误并将报告标记为 `FAILED`，不允许使用其他项目资料继续生成。报告列表 `status` 查询只允许 `DRAFT`、`PENDING`、`PROCESSING`、`COMPLETED`、`FAILED`、`ARCHIVED`、`DELETED`。
+报告生成规则：创建时只允许选择一个当前项目已启用知识库；模板必须包含 `{{ var_xx_xx }}` 变量且每个变量都已配置非空描述。Worker 按模板顺序逐项复用 QA/RAG 能力，各变量不共享上下文且不写入普通问答会话历史。变量值和状态实时保存到 `report_variable_value`；单变量失败会使报告失败，任务重试时保留成功值并只补失败或未处理变量。知识库检索为空时允许模型生成通用内容，但不得伪造具体项目数据。报告列表 `status` 查询只允许 `DRAFT`、`PENDING`、`PROCESSING`、`COMPLETED`、`FAILED`、`ARCHIVED`、`DELETED`。
 
 Report write rule: report generation must check affected rows for report-task linking, task status, processing, success, failed, and version file binding. A zero-row update is a conflict and must not be reported as completed generation.
 
@@ -355,12 +361,14 @@ P0 write confirmation addendum: project creates/updates/status/settings, file-ob
 | POST | `/api/tasks/{taskId}/retry` | 重试失败且未超过重试次数的任务 |
 | POST | `/api/tasks/{taskId}/cancel` | 取消等待中的任务，或对运行中任务写入取消请求 |
 
-任务 outbox 调度默认关闭，避免本地未启动 Redis 时影响后端启动。需要投递 Redis 队列时设置：
+任务 outbox 调度和 Worker 默认关闭，避免本地未启动 Redis 时影响后端启动。需要投递并消费 Redis 异步任务时同时设置：
 
 ```properties
 TASK_OUTBOX_DISPATCHER_ENABLED=true
 TASK_OUTBOX_DISPATCHER_BATCH_SIZE=20
 TASK_OUTBOX_DISPATCHER_FIXED_DELAY_MS=5000
+TASK_WORKER_ENABLED=true
+TASK_WORKER_ID=smart-worksite-worker
 ```
 
 Task write rule: task state transitions, stage logs, and task outbox events must confirm affected rows or generated IDs. Retry/cancel/worker/outbox operations fail with conflict when status records, stage traces, or durable outbox failure states cannot be persisted.
@@ -451,9 +459,9 @@ Review read APIs require `review:view`; submit/retry/delete/archive/update-issue
 
 ### 报告生成
 
-报告创建接口不直接阻塞生成文件。开启任务 outbox 调度和 Worker 后，Worker 会领取 `REPORT_GENERATION` 任务，确认项目仍为 `ENABLED` 后读取 DOCX 模板和参考材料，调用 Python 模型补全缺失模板变量，并在 Java 中渲染 Word 文件。
+报告创建接口不直接阻塞生成文件。开启任务 outbox 调度和 Worker 后，Worker 会领取 `REPORT_GENERATION` 任务，确认项目和唯一知识库仍可用，按 `sort_no` 逐个使用变量描述进行 RAG 检索和模型生成，全部成功后在 Java 中渲染 Word 文件。
 
-模板占位符支持 `${变量名}` 和 `{{变量名}}`；文本材料可直接读取，Word/PDF/图片等非文本材料必须先有成功的文件解析结果。
+模板占位符只支持 `{{ var_xx_xx }}`。同名变量只生成一次，正文、表格、页眉和页脚中的同名占位符使用同一个值。
 
 ### Python AI Service
 
